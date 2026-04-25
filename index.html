@@ -1,0 +1,1710 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Magic Iran — Tour Virtuale 3D</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Inter:wght@300;400;500;600&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; }
+  body {
+    background: #050510;
+    font-family: 'Inter', sans-serif;
+    color: #fff;
+    cursor: grab;
+  }
+  body.dragging { cursor: grabbing; }
+  canvas { display: block; }
+
+  /* Loading Screen */
+  #loading-screen {
+    position: fixed; inset: 0;
+    background: linear-gradient(160deg, #0a0515 0%, #0d1025 40%, #0f1a30 70%, #1a1000 100%);
+    z-index: 1000;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    transition: opacity 1.2s ease;
+  }
+  #loading-screen.fade-out { opacity: 0; pointer-events: none; }
+  #loading-screen h1 {
+    font-family: 'Playfair Display', serif;
+    font-size: 4.5rem; font-weight: 900;
+    background: linear-gradient(135deg, #f5af19 0%, #f5d380 40%, #f12711 70%, #f5af19 100%);
+    background-size: 200% 200%;
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    animation: shimmer 3s ease-in-out infinite;
+  }
+  #loading-screen .subtitle {
+    font-size: 1rem; letter-spacing: 0.4em; text-transform: uppercase;
+    color: rgba(255,255,255,0.4); margin-top: 8px;
+  }
+  .loader-ring {
+    margin-top: 40px; width: 50px; height: 50px;
+    border: 2px solid rgba(245,175,25,0.15);
+    border-top-color: #f5af19;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes shimmer {
+    0%,100% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+  }
+
+  /* Transition */
+  #transition-overlay {
+    position: fixed; inset: 0;
+    background: #050510; z-index: 500;
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.6s ease;
+  }
+  #transition-overlay.active { opacity: 1; }
+
+  /* Hub UI */
+  #hub-title {
+    position: fixed; top: 24px; left: 32px;
+    z-index: 100; pointer-events: none;
+    transition: opacity 0.5s ease;
+  }
+  #hub-title h1 {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.6rem; font-weight: 700;
+    background: linear-gradient(135deg, #f5af19, #f12711);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  #hub-title .sub {
+    font-size: 0.75rem; color: rgba(255,255,255,0.35);
+    letter-spacing: 0.25em; text-transform: uppercase; margin-top: 2px;
+  }
+  #instructions {
+    position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%);
+    z-index: 100; pointer-events: none;
+    font-size: 0.8rem; color: rgba(255,255,255,0.45);
+    background: rgba(0,0,0,0.4); backdrop-filter: blur(12px);
+    padding: 10px 24px; border-radius: 30px;
+    border: 1px solid rgba(255,255,255,0.06);
+    transition: opacity 1.5s ease;
+  }
+  #instructions.hidden { opacity: 0; }
+
+  /* Labels */
+  #labels-container {
+    position: fixed; inset: 0;
+    z-index: 50; pointer-events: none;
+    transition: opacity 0.5s ease;
+  }
+  .location-label {
+    position: absolute;
+    pointer-events: auto; cursor: pointer;
+    display: flex; flex-direction: column; align-items: center;
+    transform: translate(-50%, -50%);
+    transition: transform 0.15s ease;
+    padding: 18px 24px;
+  }
+  .location-label:hover { transform: translate(-50%, -50%) scale(1.08); }
+  .location-label:hover .label-name {
+    background: rgba(0,0,0,0.65);
+    border-color: var(--dot-color);
+  }
+  .label-dot {
+    width: 14px; height: 14px; border-radius: 50%;
+    border: 2px solid rgba(255,255,255,0.8);
+    box-shadow: 0 0 12px var(--dot-color), 0 0 30px var(--dot-color-dim);
+    background: var(--dot-color);
+    margin-top: 6px;
+  }
+  .label-name {
+    font-size: 0.78rem; font-weight: 600; color: #fff;
+    text-shadow: 0 1px 10px rgba(0,0,0,0.9), 0 0 20px rgba(0,0,0,0.5);
+    white-space: nowrap;
+    background: rgba(0,0,0,0.45); backdrop-filter: blur(8px);
+    padding: 4px 12px; border-radius: 14px;
+    border: 1px solid rgba(255,255,255,0.08);
+    transition: background 0.2s ease, border-color 0.2s ease;
+  }
+
+  /* Preview Card */
+  #preview-card {
+    position: fixed; z-index: 200; width: 290px;
+    background: rgba(10,8,20,0.88); backdrop-filter: blur(20px);
+    border-radius: 16px; border: 1px solid rgba(255,255,255,0.1);
+    box-shadow: 0 20px 60px rgba(0,0,0,0.6), 0 0 40px rgba(245,175,25,0.08);
+    overflow: hidden;
+    opacity: 0; pointer-events: none; transform: translateY(8px);
+    transition: opacity 0.25s ease, transform 0.25s ease;
+  }
+  #preview-card.visible { opacity: 1; pointer-events: auto; transform: translateY(0); }
+  .preview-image {
+    width: 100%; height: 150px;
+    object-fit: cover; display: block;
+  }
+  .preview-placeholder {
+    width: 100%; height: 150px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 3rem;
+    background: var(--preview-gradient);
+  }
+  .preview-body { padding: 14px 16px 16px; }
+  .preview-name {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.15rem; font-weight: 700; margin-bottom: 2px;
+  }
+  .preview-name-fa {
+    font-size: 0.85rem; color: rgba(255,255,255,0.5);
+    direction: rtl; margin-bottom: 8px;
+  }
+  .preview-desc {
+    font-size: 0.78rem; line-height: 1.5;
+    color: rgba(255,255,255,0.6); margin-bottom: 12px;
+  }
+  .preview-cta { font-size: 0.75rem; font-weight: 600; color: #f5af19; letter-spacing: 0.05em; }
+
+  /* Location View */
+  #location-view {
+    position: fixed; inset: 0; z-index: 400;
+    display: none; flex-direction: column;
+    align-items: center; justify-content: center; text-align: center;
+    background: #050510;
+  }
+  #location-view.active { display: flex; }
+  #location-view canvas { position: absolute; inset: 0; z-index: 0; }
+  .loc-view-bg {
+    position: absolute; inset: 0;
+    background: var(--loc-gradient); opacity: 0.12;
+  }
+  .loc-view-content {
+    position: relative; z-index: 1; max-width: 500px; padding: 40px;
+    display: none; flex-direction: column;
+    align-items: center; justify-content: center; text-align: center;
+    margin: auto;
+  }
+  .loc-view-content.visible { display: flex; }
+  .loc-view-icon { font-size: 4rem; margin-bottom: 20px; }
+  .loc-view-name {
+    font-family: 'Playfair Display', serif;
+    font-size: 2.8rem; font-weight: 900; margin-bottom: 4px;
+  }
+  .loc-view-name-fa {
+    font-size: 1.5rem; color: rgba(255,255,255,0.5);
+    direction: rtl; margin-bottom: 16px;
+  }
+  .loc-view-desc {
+    font-size: 1rem; line-height: 1.7;
+    color: rgba(255,255,255,0.7); margin-bottom: 30px;
+  }
+  .loc-view-badge {
+    display: inline-block; padding: 6px 20px;
+    border-radius: 20px; border: 1px solid rgba(245,175,25,0.3);
+    color: #f5af19; font-size: 0.8rem; font-weight: 500;
+    letter-spacing: 0.1em; margin-bottom: 24px;
+  }
+  #back-btn {
+    position: fixed; top: 28px; left: 28px; z-index: 410;
+    display: none; align-items: center; gap: 8px;
+    padding: 12px 28px; border-radius: 30px;
+    border: 1px solid rgba(255,255,255,0.2);
+    background: rgba(0,0,0,0.5); backdrop-filter: blur(10px);
+    color: #fff; font-size: 0.85rem; font-weight: 500;
+    cursor: pointer; transition: all 0.3s ease;
+  }
+  #back-btn.visible { display: inline-flex; }
+  #back-btn:hover { background: rgba(255,255,255,0.15); border-color: rgba(255,255,255,0.3); }
+  #loc-info-panel {
+    position: fixed; bottom: 32px; left: 50%; transform: translateX(-50%);
+    z-index: 410; display: none;
+    background: rgba(8,5,18,0.82); backdrop-filter: blur(20px);
+    border-radius: 20px; border: 1px solid rgba(255,255,255,0.08);
+    padding: 18px 28px; max-width: 520px; text-align: center;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+  }
+  #loc-info-panel.visible { display: block; }
+  #loc-info-panel h2 {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.3rem; font-weight: 700; margin-bottom: 4px;
+  }
+  #loc-info-panel .fa { font-size: 0.85rem; color: rgba(255,255,255,0.45); direction: rtl; margin-bottom: 8px; }
+  #loc-info-panel p { font-size: 0.78rem; line-height: 1.6; color: rgba(255,255,255,0.55); }
+  #loc-hint {
+    position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%);
+    z-index: 410; pointer-events: none;
+    font-size: 0.85rem; color: rgba(255,255,255,0.5);
+    background: rgba(0,0,0,0.5); backdrop-filter: blur(10px);
+    padding: 12px 28px; border-radius: 30px;
+    border: 1px solid rgba(255,255,255,0.08);
+    opacity: 0; transition: opacity 1.5s ease;
+  }
+  #loc-hint.visible { opacity: 1; }
+
+  /* Compass */
+  #compass {
+    position: fixed; bottom: 28px; right: 28px;
+    z-index: 100; pointer-events: none;
+    width: 80px; height: 80px;
+  }
+  #compass svg {
+    width: 100%; height: 100%;
+    filter: drop-shadow(0 0 10px rgba(0,0,0,0.5));
+  }
+  #compass .compass-ring { fill: none; stroke: rgba(255,255,255,0.12); stroke-width: 1.5; }
+  #compass .compass-n { fill: #f5af19; font-size: 11px; font-weight: 700; font-family: 'Inter', sans-serif; }
+  #compass .compass-dir { fill: rgba(255,255,255,0.3); font-size: 8px; font-weight: 500; font-family: 'Inter', sans-serif; }
+  #compass .compass-needle-n { fill: #f5af19; }
+  #compass .compass-needle-s { fill: rgba(255,255,255,0.2); }
+
+  @media (max-width: 768px) {
+    #loading-screen h1 { font-size: 2.8rem; }
+    #preview-card { width: 240px; }
+    .loc-view-name { font-size: 2rem; }
+    .label-name { font-size: 0.7rem; }
+    #compass { width: 60px; height: 60px; bottom: 20px; right: 20px; }
+  }
+</style>
+</head>
+<body>
+
+<div id="loading-screen">
+  <h1>Magic Iran</h1>
+  <p class="subtitle">Viaggio tra le meraviglie</p>
+  <div class="loader-ring"></div>
+</div>
+
+<div id="transition-overlay"></div>
+
+<div id="hub-title">
+  <h1>Magic Iran</h1>
+  <div class="sub">Esplora i luoghi più iconici</div>
+</div>
+
+<div id="instructions">
+  Trascina per guardarti intorno · Clicca su un luogo per esplorarlo · Scrolla per lo zoom
+</div>
+
+<div id="labels-container"></div>
+
+<div id="preview-card">
+  <img class="preview-image" id="preview-real-img" src="" alt="" style="display:none">
+  <div class="preview-placeholder" id="preview-img"></div>
+  <div class="preview-body">
+    <div class="preview-name" id="preview-name"></div>
+    <div class="preview-name-fa" id="preview-name-fa"></div>
+    <div class="preview-desc" id="preview-desc"></div>
+    <div class="preview-cta">Clicca per esplorare →</div>
+  </div>
+</div>
+
+<div id="compass">
+  <svg viewBox="0 0 100 100">
+    <circle class="compass-ring" cx="50" cy="50" r="44"/>
+    <circle class="compass-ring" cx="50" cy="50" r="38" style="stroke-dasharray:3,5;opacity:0.5"/>
+    <!-- Needle -->
+    <polygon class="compass-needle-n" points="50,14 46,50 54,50" id="compass-needle-n"/>
+    <polygon class="compass-needle-s" points="50,86 46,50 54,50" id="compass-needle-s"/>
+    <circle cx="50" cy="50" r="3" fill="rgba(255,255,255,0.4)"/>
+    <!-- Cardinal points -->
+    <text class="compass-n" x="50" y="10" text-anchor="middle" id="compass-N">N</text>
+    <text class="compass-dir" x="50" y="96" text-anchor="middle" id="compass-S">S</text>
+    <text class="compass-dir" x="96" y="54" text-anchor="middle" id="compass-E">E</text>
+    <text class="compass-dir" x="4" y="54" text-anchor="middle" id="compass-W">W</text>
+  </svg>
+</div>
+
+<button id="back-btn" onclick="exitLocation()">
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+  Torna alla mappa
+</button>
+<div id="loc-info-panel">
+  <h2 id="loc-panel-name"></h2>
+  <div class="fa" id="loc-panel-fa"></div>
+  <p id="loc-panel-desc"></p>
+</div>
+<div id="loc-hint">Trascina per guardarti intorno</div>
+<div id="location-view">
+  <div class="loc-view-bg" id="loc-bg"></div>
+  <div class="loc-view-content">
+    <div class="loc-view-icon" id="loc-icon"></div>
+    <div class="loc-view-name" id="loc-name"></div>
+    <div class="loc-view-name-fa" id="loc-name-fa"></div>
+    <div class="loc-view-badge">Prossimamente — Tour immersivo 3D</div>
+    <div class="loc-view-desc" id="loc-desc"></div>
+  </div>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+// ============================================================
+//  LOCATION DATA
+// ============================================================
+const locations = [
+  {
+    id: 'persepolis', name: 'Persepolis', nameFa: 'تخت جمشید',
+    desc: 'L\'antica capitale cerimoniale dell\'Impero Achemenide, fondata da Dario il Grande nel 518 a.C. Le sue maestose colonne e i rilievi scolpiti narrano la grandezza della Persia.',
+    lat: 29.935, lon: 52.891, color: '#f5a623', icon: '🏛️',
+    gradient: 'linear-gradient(135deg, #ff9a56, #c2185b)',
+    image: 'https://upload.wikimedia.org/wikipedia/commons/thumb/7/79/Persepolis_2012.jpg/500px-Persepolis_2012.jpg',
+  },
+  {
+    id: 'nasir-al-mulk', name: 'Moschea Nasir al-Mulk', nameFa: 'مسجد نصیرالملک',
+    desc: 'La "Moschea Rosa" di Shiraz: le sue vetrate policrome trasformano la luce dell\'alba in un caleidoscopio di colori che danza sulle colonne.',
+    lat: 29.609, lon: 52.548, color: '#e91e63', icon: '🕌',
+    gradient: 'linear-gradient(135deg, #e91e63, #9c27b0)',
+    image: 'https://upload.wikimedia.org/wikipedia/commons/thumb/3/35/Nasir-ol-Molk_Mosque_(inside).jpg/500px-Nasir-ol-Molk_Mosque_(inside).jpg',
+  },
+  {
+    id: 'naqsh-e-jahan', name: 'Piazza Naqsh-e Jahan', nameFa: 'میدان نقش جهان',
+    desc: '"Immagine del Mondo" — una delle piazze più grandi della Terra, nel cuore di Isfahan. Le moschee e il bazar raccontano lo splendore Safavide.',
+    lat: 32.657, lon: 51.677, color: '#2196f3', icon: '🏰',
+    gradient: 'linear-gradient(135deg, #0288d1, #01579b)',
+    image: 'https://upload.wikimedia.org/wikipedia/commons/thumb/f/f6/Naghshe_Jahan_Square_Isfahan_modified2.jpg/500px-Naghshe_Jahan_Square_Isfahan_modified2.jpg',
+  },
+  {
+    id: 'golestan', name: 'Palazzo del Golestan', nameFa: 'کاخ گلستان',
+    desc: 'Il palazzo reale più antico di Tehran: mosaici, specchi e giardini incantati. Patrimonio UNESCO e simbolo dell\'arte Qajar.',
+    lat: 35.684, lon: 51.414, color: '#4caf50', icon: '👑',
+    gradient: 'linear-gradient(135deg, #388e3c, #1b5e20)',
+    image: 'https://upload.wikimedia.org/wikipedia/commons/thumb/2/2f/Golestan-palace.jpg/500px-Golestan-palace.jpg',
+  },
+  {
+    id: 'badab-e-surt', name: 'Badab-e Surt', nameFa: 'باداب سورت',
+    desc: 'Terrazze travertine formate in migliaia di anni da sorgenti termali. I colori vanno dall\'arancione al rosso, creando un paesaggio alieno e surreale.',
+    lat: 36.392, lon: 53.935, color: '#ff5722', icon: '🌋',
+    gradient: 'linear-gradient(135deg, #ff5722, #e64a19)',
+    image: 'https://upload.wikimedia.org/wikipedia/commons/thumb/3/38/Badab-e_Surt.jpg/500px-Badab-e_Surt.jpg',
+  },
+  {
+    id: 'yazd', name: 'Città Vecchia di Yazd', nameFa: 'بافت تاریخی یزد',
+    desc: 'Una delle città abitate più antiche del mondo. I suoi badgir, i vicoli di adobe e le torri del silenzio zoroastriane vibrano di storia millenaria.',
+    lat: 31.897, lon: 54.357, color: '#ff9800', icon: '🏺',
+    gradient: 'linear-gradient(135deg, #ff9800, #e65100)',
+    image: 'https://upload.wikimedia.org/wikipedia/commons/thumb/8/83/Masjed-e_Jomeh,_Yazd.jpg/500px-Masjed-e_Jomeh,_Yazd.jpg',
+  },
+  {
+    id: 'dasht-e-lut', name: 'Deserto Dasht-e Lut', nameFa: 'دشت لوت',
+    desc: 'Il punto più caldo della Terra. Le formazioni rocciose scolpite dal vento — i Kalut — creano una città fantasma naturale di proporzioni cosmiche.',
+    lat: 30.55, lon: 58.75, color: '#bf360c', icon: '🏜️',
+    gradient: 'linear-gradient(135deg, #bf360c, #4e342e)',
+    image: 'https://upload.wikimedia.org/wikipedia/commons/thumb/6/62/Lut_Desert_Yardangs_by_Hadi_Karimi.jpg/500px-Lut_Desert_Yardangs_by_Hadi_Karimi.jpg',
+  },
+  {
+    id: 'tabriz', name: 'Bazar di Tabriz', nameFa: 'بازار تبریز',
+    desc: 'Il bazar coperto più grande del mondo, patrimonio UNESCO. I suoi corridoi si estendono per chilometri, pieni di spezie, tappeti e storie.',
+    lat: 38.079, lon: 46.289, color: '#9c27b0', icon: '🧶',
+    gradient: 'linear-gradient(135deg, #9c27b0, #4a148c)',
+    image: 'https://upload.wikimedia.org/wikipedia/commons/thumb/c/c4/Tabriz_Bazar.jpg/500px-Tabriz_Bazar.jpg',
+  }
+];
+
+const connections = [
+  ['persepolis','nasir-al-mulk'],['nasir-al-mulk','naqsh-e-jahan'],
+  ['nasir-al-mulk','yazd'],['naqsh-e-jahan','golestan'],
+  ['naqsh-e-jahan','yazd'],['golestan','tabriz'],
+  ['golestan','badab-e-surt'],['yazd','dasht-e-lut'],
+  ['badab-e-surt','dasht-e-lut'],
+];
+
+const iranBorder = [
+  // NW corner - Azerbaijan border
+  [39.40,44.79],[39.60,44.81],[39.78,44.77],[39.78,45.00],[39.60,45.36],
+  [39.35,45.48],[39.21,45.58],[39.35,46.00],[39.19,46.37],[38.87,46.51],
+  // NW - Caspian approach
+  [38.86,47.09],[38.60,47.69],[38.47,48.01],[38.36,48.30],[38.41,48.88],
+  [38.17,49.08],[37.77,49.10],[37.47,49.50],[37.32,49.88],[37.06,50.10],
+  // Caspian south coast
+  [36.90,50.33],[36.76,50.93],[36.60,51.10],[36.58,51.42],[36.64,51.78],
+  [36.70,52.10],[36.75,52.60],[36.82,53.12],[36.92,53.60],[37.03,53.93],
+  // NE coast to Turkmenistan
+  [37.12,54.20],[37.33,54.50],[37.45,54.85],[37.65,55.35],[37.84,55.70],
+  [37.63,56.35],[37.58,57.07],[37.40,57.20],[37.30,57.50],[37.12,57.90],
+  // Eastern border - Turkmenistan/Afghanistan
+  [36.87,58.50],[36.60,59.30],[36.20,59.90],[35.85,60.50],[35.50,60.70],
+  [34.70,60.90],[34.30,60.70],[33.70,60.50],[33.05,60.55],[32.45,60.80],
+  [31.85,61.15],[31.30,61.55],[31.03,61.78],[30.45,61.60],[30.00,61.30],
+  // SE - Pakistan border
+  [29.45,61.60],[29.05,61.85],[28.60,61.90],[27.90,62.30],[27.20,62.50],
+  [26.80,62.20],[26.40,61.80],[26.15,61.50],[25.80,61.40],[25.35,60.65],
+  [25.40,59.95],[25.65,58.90],[25.40,57.80],[25.30,57.40],
+  // Southern coast - Oman Sea / Persian Gulf
+  [25.50,57.05],[25.78,57.20],[26.00,56.38],[26.15,56.20],[26.35,55.75],
+  [26.53,55.30],[26.68,54.90],[26.85,54.43],[27.10,53.90],[27.15,53.50],
+  [27.22,52.85],[27.38,52.40],[27.55,52.00],[27.80,51.60],[28.12,51.40],
+  // Persian Gulf coast
+  [28.45,51.15],[28.80,50.85],[29.10,50.50],[29.35,50.30],[29.60,50.15],
+  [29.85,49.70],[30.00,49.35],[30.20,49.00],[30.35,48.80],[30.55,48.40],
+  // Western border - Iraq
+  [30.90,48.00],[31.20,47.50],[31.55,47.15],[31.85,46.90],[32.10,46.60],
+  [32.40,46.35],[32.75,46.10],[33.05,45.95],[33.40,45.65],[33.85,45.50],
+  [34.30,45.40],[34.70,45.45],[35.00,45.35],[35.30,45.25],[35.80,45.30],
+  // NW - Turkey border
+  [36.20,45.10],[36.60,44.80],[37.00,44.55],[37.40,44.30],[37.80,44.20],
+  [38.10,44.40],[38.40,44.30],[38.72,44.38],[39.05,44.50],[39.40,44.79]
+];
+
+// ============================================================
+//  GEO → 3D
+// ============================================================
+const CENTER_LAT = 32.5, CENTER_LON = 53.5, SCALE = 10;
+function geoTo3D(lat, lon) {
+  return new THREE.Vector3((lon - CENTER_LON) * SCALE, 0, -(lat - CENTER_LAT) * SCALE);
+}
+
+// ============================================================
+//  SCENE
+// ============================================================
+let scene, camera, renderer, controls, clock;
+let appState = 'hub';
+let hoveredIndex = -1;
+let particleUniforms;
+const markerGroups = [];
+const hitMeshes = [];
+const labelElements = [];
+
+function init() {
+  clock = new THREE.Clock();
+  scene = new THREE.Scene();
+  scene.fog = new THREE.FogExp2(0x060a18, 0.0022);
+
+  camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 2000);
+  camera.position.set(-20, 75, 95);
+
+  renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.1;
+  document.body.appendChild(renderer.domElement);
+
+  controls = new OrbitControls(camera, renderer.domElement);
+  controls.target.set(0, 5, 0);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.06;
+  controls.minDistance = 35;
+  controls.maxDistance = 220;
+  controls.maxPolarAngle = Math.PI * 0.47;
+  controls.minPolarAngle = Math.PI * 0.08;
+  controls.autoRotate = true;
+  controls.autoRotateSpeed = 0.18;
+  controls.enablePan = false;
+  controls.zoomSpeed = 2.5;
+
+  createSky();
+  createStars();
+  createGround();
+  createSeaAreas();
+  createIranOutline();
+  createConnectionLines();
+  createLocationMarkers();
+  createParticles();
+  createLabels();
+  createGeoLabels();
+
+  renderer.domElement.addEventListener('mousemove', onMouseMove);
+  renderer.domElement.addEventListener('click', onClick);
+  renderer.domElement.addEventListener('touchend', onTouchEnd);
+  window.addEventListener('resize', onResize);
+
+  setTimeout(() => {
+    document.getElementById('loading-screen').classList.add('fade-out');
+    setTimeout(() => document.getElementById('loading-screen').style.display = 'none', 1200);
+  }, 2200);
+  setTimeout(() => document.getElementById('instructions').classList.add('hidden'), 8000);
+
+  animate();
+}
+
+// ============================================================
+//  SKY
+// ============================================================
+function createSky() {
+  const geo = new THREE.SphereGeometry(900, 32, 20);
+  const mat = new THREE.ShaderMaterial({
+    side: THREE.BackSide, depthWrite: false,
+    vertexShader: `
+      varying vec3 vWorldPos;
+      void main() {
+        vWorldPos = (modelMatrix * vec4(position,1.0)).xyz;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0);
+      }
+    `,
+    fragmentShader: `
+      varying vec3 vWorldPos;
+      void main() {
+        float h = normalize(vWorldPos).y;
+        // Palette: warm amber horizon → soft teal → deep navy
+        vec3 warmAmber  = vec3(0.80, 0.48, 0.22);
+        vec3 peachGlow  = vec3(0.62, 0.42, 0.32);
+        vec3 softTeal   = vec3(0.25, 0.42, 0.58);
+        vec3 clearBlue  = vec3(0.12, 0.28, 0.55);
+        vec3 deepBlue   = vec3(0.06, 0.12, 0.32);
+        vec3 navy       = vec3(0.02, 0.04, 0.14);
+        vec3 c;
+        if(h<-0.05) c=mix(vec3(0.02,0.02,0.06), warmAmber*0.25, smoothstep(-0.25,-0.05,h));
+        else if(h<0.04) c=mix(warmAmber*0.25, warmAmber, smoothstep(-0.05,0.04,h));
+        else if(h<0.10) c=mix(warmAmber, peachGlow, smoothstep(0.04,0.10,h));
+        else if(h<0.20) c=mix(peachGlow, softTeal, smoothstep(0.10,0.20,h));
+        else if(h<0.35) c=mix(softTeal, clearBlue, smoothstep(0.20,0.35,h));
+        else if(h<0.55) c=mix(clearBlue, deepBlue, smoothstep(0.35,0.55,h));
+        else c=mix(deepBlue, navy, smoothstep(0.55,1.0,h));
+        gl_FragColor = vec4(c,1.0);
+      }
+    `
+  });
+  scene.add(new THREE.Mesh(geo, mat));
+}
+
+// ============================================================
+//  STARS
+// ============================================================
+function createStars() {
+  const N = 1200;
+  const pos = new Float32Array(N*3), sz = new Float32Array(N);
+  for(let i=0;i<N;i++){
+    const phi=Math.acos(1-Math.random()*0.75), theta=Math.random()*Math.PI*2, r=800+Math.random()*80;
+    pos[i*3]=r*Math.sin(phi)*Math.cos(theta);
+    pos[i*3+1]=r*Math.cos(phi);
+    pos[i*3+2]=r*Math.sin(phi)*Math.sin(theta);
+    sz[i]=Math.random()*2.5+0.5;
+  }
+  const geo=new THREE.BufferGeometry();
+  geo.setAttribute('position',new THREE.BufferAttribute(pos,3));
+  geo.setAttribute('size',new THREE.BufferAttribute(sz,1));
+  const mat=new THREE.ShaderMaterial({
+    transparent:true,depthWrite:false,blending:THREE.AdditiveBlending,
+    uniforms:{uTime:{value:0}},
+    vertexShader:`
+      attribute float size; uniform float uTime; varying float vA;
+      void main(){
+        vA=0.4+0.6*abs(sin(uTime*0.5+position.x*0.01));
+        vec4 mv=modelViewMatrix*vec4(position,1.0);
+        gl_PointSize=size*(400.0/-mv.z);
+        gl_Position=projectionMatrix*mv;
+      }
+    `,
+    fragmentShader:`
+      varying float vA;
+      void main(){
+        float d=length(gl_PointCoord-0.5);
+        gl_FragColor=vec4(1.0,0.97,0.9,smoothstep(0.5,0.0,d)*vA);
+      }
+    `
+  });
+  const stars=new THREE.Points(geo,mat);
+  stars.userData.mat=mat;
+  scene.add(stars);
+}
+
+// ============================================================
+//  GROUND
+// ============================================================
+function createGround() {
+  // Warm gradient ground plane
+  const groundGeo = new THREE.CircleGeometry(200, 64);
+  const groundMat = new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false, side: THREE.DoubleSide,
+    vertexShader: `
+      varying vec2 vUv;
+      void main() {
+        vUv = uv;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }
+    `,
+    fragmentShader: `
+      varying vec2 vUv;
+      void main() {
+        float d = length(vUv - 0.5) * 2.0;
+        // Warm desert-ish palette: center teal-brown → edges fade out
+        vec3 inner = vec3(0.08, 0.10, 0.16);  // dark blue-grey
+        vec3 mid = vec3(0.10, 0.08, 0.12);    // muted purple-brown
+        vec3 outer = vec3(0.06, 0.04, 0.08);   // deep edge
+        vec3 c = mix(inner, mid, smoothstep(0.0, 0.5, d));
+        c = mix(c, outer, smoothstep(0.5, 1.0, d));
+        // Subtle warm glow at center
+        c += vec3(0.06, 0.04, 0.02) * (1.0 - smoothstep(0.0, 0.6, d));
+        float alpha = smoothstep(1.0, 0.35, d) * 0.55;
+        gl_FragColor = vec4(c, alpha);
+      }
+    `
+  });
+  const disc = new THREE.Mesh(groundGeo, groundMat);
+  disc.rotation.x = -Math.PI / 2;
+  disc.position.y = -0.5;
+  scene.add(disc);
+
+  // Subtle grid with warmer tones
+  const grid = new THREE.GridHelper(360, 40, 0x2a2040, 0x161228);
+  grid.material.transparent = true;
+  grid.material.opacity = 0.10;
+  grid.position.y = -0.3;
+  scene.add(grid);
+}
+
+// ============================================================
+//  SEA AREAS (stylized dreamy water bodies)
+// ============================================================
+function createSeaAreas() {
+  // --- Caspian Sea (north) ---
+  const caspianCoords = [
+    [36.60,49.50],[36.75,50.00],[36.78,50.50],[36.90,51.10],[37.00,51.60],
+    [37.20,52.00],[37.40,52.40],[37.60,52.80],[38.00,53.20],[38.50,53.30],
+    [39.00,53.10],[39.40,52.60],[39.80,52.00],[40.30,51.50],[40.80,51.20],
+    [41.30,50.80],[41.80,50.30],[42.00,49.70],[41.80,49.00],[41.50,48.50],
+    [41.00,48.00],[40.50,48.00],[40.00,48.50],[39.50,49.00],[39.20,49.20],
+    [38.80,49.30],[38.40,49.30],[38.00,49.10],[37.60,49.20],[37.20,49.40],
+    [36.60,49.50]
+  ];
+  addSeaShape(caspianCoords, 0x1a4a6a, 0.14);
+
+  // --- Persian Gulf (south) ---
+  const gulfCoords = [
+    [30.30,48.30],[30.00,48.60],[29.60,49.00],[29.20,49.50],[28.90,49.80],
+    [28.60,50.20],[28.30,50.40],[28.00,50.60],[27.60,51.00],[27.30,51.40],
+    [27.00,51.80],[26.70,52.20],[26.50,52.60],[26.30,53.50],[26.10,54.20],
+    [25.80,55.60],[25.50,56.50],[25.20,56.80],[24.80,56.30],[24.50,55.60],
+    [24.40,54.80],[24.50,54.00],[24.80,53.00],[25.20,52.00],[25.80,51.00],
+    [26.50,50.30],[27.20,49.60],[27.80,49.00],[28.50,48.50],[29.20,48.20],
+    [29.80,48.10],[30.30,48.30]
+  ];
+  addSeaShape(gulfCoords, 0x1a4a6a, 0.11);
+
+  // --- Gulf of Oman (SE) ---
+  const omanCoords = [
+    [25.50,57.05],[25.30,57.40],[25.00,58.00],[24.60,58.50],[24.30,59.00],
+    [24.50,59.80],[25.00,60.00],[25.50,59.50],[26.00,58.50],[26.20,57.80],
+    [26.00,57.20],[25.50,57.05]
+  ];
+  addSeaShape(omanCoords, 0x1a4a6a, 0.09);
+}
+
+function addSeaShape(coords, color, opacity) {
+  const pts = coords.map(([la,lo]) => {
+    const p = geoTo3D(la, lo);
+    return new THREE.Vector2(p.x, p.z);
+  });
+  const shape = new THREE.Shape(pts);
+  const geo = new THREE.ShapeGeometry(shape);
+  const mat = new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false, side: THREE.DoubleSide,
+    uniforms: { uTime: { value: 0 }, uColor: { value: new THREE.Color(color) }, uOpacity: { value: opacity } },
+    vertexShader: `
+      varying vec2 vPos;
+      void main() {
+        vPos = position.xy;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }
+    `,
+    fragmentShader: `
+      uniform float uTime, uOpacity;
+      uniform vec3 uColor;
+      varying vec2 vPos;
+      void main() {
+        float wave = sin(vPos.x * 0.3 + uTime * 0.4) * 0.5 + 0.5;
+        wave *= sin(vPos.y * 0.25 + uTime * 0.3) * 0.5 + 0.5;
+        vec3 c = uColor + vec3(0.03, 0.06, 0.10) * wave;
+        float a = uOpacity * (0.7 + wave * 0.3);
+        gl_FragColor = vec4(c, a);
+      }
+    `
+  });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.rotation.x = -Math.PI / 2;
+  mesh.position.y = -0.2;
+  mesh.userData.seaMat = mat;
+  scene.add(mesh);
+}
+
+// ============================================================
+//  GEO REFERENCE LABELS
+// ============================================================
+function createGeoLabels() {
+  const container = document.getElementById('labels-container');
+  const geoRefs = [
+    { name: 'Mar Caspio', lat: 39.5, lon: 51.5, size: '0.65rem' },
+    { name: 'Golfo Persico', lat: 27.0, lon: 51.0, size: '0.65rem' },
+    { name: 'Golfo di Oman', lat: 25.0, lon: 58.5, size: '0.6rem' },
+    { name: 'Iraq', lat: 33.0, lon: 44.5, size: '0.55rem' },
+    { name: 'Turkmenistan', lat: 38.5, lon: 57.0, size: '0.55rem' },
+    { name: 'Afghanistan', lat: 33.5, lon: 61.5, size: '0.55rem' },
+    { name: 'Pakistan', lat: 28.0, lon: 62.0, size: '0.55rem' },
+    { name: 'Turchia', lat: 38.5, lon: 43.5, size: '0.55rem' },
+  ];
+  geoRefs.forEach(ref => {
+    const el = document.createElement('div');
+    el.style.cssText = `
+      position: absolute; pointer-events: none;
+      font-size: ${ref.size}; font-weight: 400;
+      color: rgba(255,255,255,0.18); letter-spacing: 0.15em;
+      text-transform: uppercase; white-space: nowrap;
+      font-family: 'Inter', sans-serif;
+    `;
+    el.textContent = ref.name;
+    el.dataset.geoLat = ref.lat;
+    el.dataset.geoLon = ref.lon;
+    container.appendChild(el);
+  });
+}
+
+// ============================================================
+//  IRAN OUTLINE
+// ============================================================
+function createIranOutline() {
+  const pts=iranBorder.map(([la,lo])=>{const p=geoTo3D(la,lo);p.y=0.5;return p;});
+  const geo=new THREE.BufferGeometry().setFromPoints(pts);
+  scene.add(new THREE.Line(geo,new THREE.LineBasicMaterial({
+    color:0xf5af19,transparent:true,opacity:0.3,blending:THREE.AdditiveBlending,depthWrite:false
+  })));
+  scene.add(new THREE.Line(geo.clone(),new THREE.LineBasicMaterial({
+    color:0xf5c842,transparent:true,opacity:0.08,blending:THREE.AdditiveBlending,depthWrite:false
+  })));
+
+  const dotPos=[];
+  for(let i=0;i<pts.length-1;i++){
+    const a=pts[i],b=pts[i+1];
+    for(let s=0;s<5;s++){const t=s/5;dotPos.push(a.x+(b.x-a.x)*t,0.6,a.z+(b.z-a.z)*t);}
+  }
+  const dg=new THREE.BufferGeometry();
+  dg.setAttribute('position',new THREE.Float32BufferAttribute(dotPos,3));
+  scene.add(new THREE.Points(dg,new THREE.PointsMaterial({
+    color:0xf5af19,size:0.6,transparent:true,opacity:0.25,blending:THREE.AdditiveBlending,depthWrite:false
+  })));
+}
+
+// ============================================================
+//  CONNECTIONS
+// ============================================================
+const connectionMeshes = [];
+function createConnectionLines() {
+  connections.forEach(([idA,idB])=>{
+    const a=locations.find(l=>l.id===idA),b=locations.find(l=>l.id===idB);
+    if(!a||!b)return;
+    const pA=geoTo3D(a.lat,a.lon),pB=geoTo3D(b.lat,b.lon);
+    const mid=new THREE.Vector3((pA.x+pB.x)/2,Math.max(4,pA.distanceTo(pB)*0.15),(pA.z+pB.z)/2);
+    pA.y=1;pB.y=1;
+    const curve=new THREE.QuadraticBezierCurve3(pA,mid,pB);
+    const pts = curve.getPoints(60);
+
+    // Soft glow base line
+    scene.add(new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints(pts),
+      new THREE.LineBasicMaterial({color:0xf5af19,transparent:true,opacity:0.12,blending:THREE.AdditiveBlending,depthWrite:false})
+    ));
+
+    // Animated dashed line on top
+    const dashGeo = new THREE.BufferGeometry().setFromPoints(pts);
+    const dashMat = new THREE.LineDashedMaterial({
+      color: 0xf5d080, transparent: true, opacity: 0.35,
+      dashSize: 1.5, gapSize: 1.2,
+      blending: THREE.AdditiveBlending, depthWrite: false
+    });
+    const dashLine = new THREE.Line(dashGeo, dashMat);
+    dashLine.computeLineDistances();
+    connectionMeshes.push(dashLine);
+    scene.add(dashLine);
+
+    // Flowing particles along the arc
+    const flowN = 6;
+    const flowSizes = new Float32Array(flowN);
+    const flowPositions = new Float32Array(flowN * 3);
+    for(let i=0;i<flowN;i++) { flowSizes[i] = 1.5 + Math.random(); }
+    const flowGeo = new THREE.BufferGeometry();
+    flowGeo.setAttribute('position', new THREE.BufferAttribute(flowPositions, 3));
+    flowGeo.setAttribute('size', new THREE.BufferAttribute(flowSizes, 1));
+    const flowPts = new THREE.Points(flowGeo, new THREE.PointsMaterial({
+      color: 0xf5c060, size: 1.2, transparent: true, opacity: 0.5,
+      blending: THREE.AdditiveBlending, depthWrite: false, sizeAttenuation: true
+    }));
+    flowPts.userData.curve = curve;
+    flowPts.userData.flowN = flowN;
+    connectionMeshes.push(flowPts);
+    scene.add(flowPts);
+  });
+}
+
+// ============================================================
+//  MARKERS
+// ============================================================
+function createLocationMarkers() {
+  locations.forEach((loc,i)=>{
+    const pos=geoTo3D(loc.lat,loc.lon);
+    const color=new THREE.Color(loc.color);
+    const g=new THREE.Group();
+    g.position.copy(pos);
+
+    const crystalWire=new THREE.Mesh(
+      new THREE.OctahedronGeometry(1.8,0),
+      new THREE.MeshBasicMaterial({color,wireframe:true,transparent:true,opacity:0.8})
+    );
+    crystalWire.position.y=8; g.add(crystalWire);
+
+    const crystalSolid=new THREE.Mesh(
+      new THREE.OctahedronGeometry(1.3,0),
+      new THREE.MeshBasicMaterial({color,transparent:true,opacity:0.25,blending:THREE.AdditiveBlending,depthWrite:false})
+    );
+    crystalSolid.position.y=8; g.add(crystalSolid);
+
+    const beam=new THREE.Mesh(
+      new THREE.CylinderGeometry(0.08,0.5,18,8,1,true),
+      new THREE.MeshBasicMaterial({color,transparent:true,opacity:0.1,blending:THREE.AdditiveBlending,side:THREE.DoubleSide,depthWrite:false})
+    );
+    beam.position.y=9; g.add(beam);
+
+    const ring=new THREE.Mesh(
+      new THREE.RingGeometry(2.0,2.6,32),
+      new THREE.MeshBasicMaterial({color,transparent:true,opacity:0.2,blending:THREE.AdditiveBlending,side:THREE.DoubleSide,depthWrite:false})
+    );
+    ring.rotation.x=-Math.PI/2; ring.position.y=0.3; g.add(ring);
+
+    const light=new THREE.PointLight(color,3,25,2);
+    light.position.y=8; g.add(light);
+
+    scene.add(g);
+
+    const hitMesh=new THREE.Mesh(new THREE.SphereGeometry(6,8,8),new THREE.MeshBasicMaterial({visible:false}));
+    hitMesh.position.set(pos.x,5,pos.z);
+    hitMesh.userData.locationIndex=i;
+    scene.add(hitMesh);
+    hitMeshes.push(hitMesh);
+
+    markerGroups.push({group:g,crystalWire,crystalSolid,beam,ring,light,loc});
+  });
+}
+
+// ============================================================
+//  PARTICLES
+// ============================================================
+function createParticles() {
+  const N=2000;
+  const pos=new Float32Array(N*3),col=new Float32Array(N*3);
+  const sz=new Float32Array(N),spd=new Float32Array(N),ph=new Float32Array(N);
+  const palette=[new THREE.Color('#8ab4d6'),new THREE.Color('#a0c4dd'),new THREE.Color('#d4c8a0'),new THREE.Color('#c4a882'),new THREE.Color('#b0d0e8')];
+  for(let i=0;i<N;i++){
+    pos[i*3]=(Math.random()-0.5)*300;
+    pos[i*3+1]=Math.random()*80+2;
+    pos[i*3+2]=(Math.random()-0.5)*250;
+    const c=palette[Math.floor(Math.random()*palette.length)];
+    col[i*3]=c.r;col[i*3+1]=c.g;col[i*3+2]=c.b;
+    sz[i]=Math.random()*2.0+0.4;
+    spd[i]=Math.random()*0.4+0.1;
+    ph[i]=Math.random()*Math.PI*2;
+  }
+  const geo=new THREE.BufferGeometry();
+  geo.setAttribute('position',new THREE.BufferAttribute(pos,3));
+  geo.setAttribute('aColor',new THREE.BufferAttribute(col,3));
+  geo.setAttribute('aSize',new THREE.BufferAttribute(sz,1));
+  geo.setAttribute('aSpeed',new THREE.BufferAttribute(spd,1));
+  geo.setAttribute('aPhase',new THREE.BufferAttribute(ph,1));
+
+  particleUniforms={uTime:{value:0}};
+  const mat=new THREE.ShaderMaterial({
+    transparent:true,depthWrite:false,blending:THREE.AdditiveBlending,
+    uniforms:particleUniforms,
+    vertexShader:`
+      attribute float aSize,aSpeed,aPhase;
+      attribute vec3 aColor;
+      uniform float uTime;
+      varying vec3 vColor; varying float vAlpha;
+      void main(){
+        vColor=aColor;
+        vec3 p=position;
+        p.y+=sin(uTime*aSpeed+aPhase)*4.0;
+        p.x+=cos(uTime*aSpeed*0.6+aPhase*1.4)*2.5;
+        p.z+=sin(uTime*aSpeed*0.4+aPhase*0.8)*2.5;
+        vec4 mv=modelViewMatrix*vec4(p,1.0);
+        gl_PointSize=aSize*(150.0/max(-mv.z,1.0));
+        gl_Position=projectionMatrix*mv;
+        vAlpha=smoothstep(600.0,30.0,-mv.z)*0.35;
+      }
+    `,
+    fragmentShader:`
+      varying vec3 vColor; varying float vAlpha;
+      void main(){
+        float d=length(gl_PointCoord-0.5);
+        float a=(exp(-d*d*12.0)*0.4+smoothstep(0.5,0.05,d)*0.6)*vAlpha;
+        gl_FragColor=vec4(vColor,a);
+      }
+    `
+  });
+  scene.add(new THREE.Points(geo,mat));
+}
+
+// ============================================================
+//  LABELS
+// ============================================================
+function createLabels() {
+  const container=document.getElementById('labels-container');
+  locations.forEach((loc,i)=>{
+    const el=document.createElement('div');
+    el.className='location-label';
+    el.style.setProperty('--dot-color',loc.color);
+    el.style.setProperty('--dot-color-dim',loc.color+'44');
+    el.innerHTML=`<div class="label-name">${loc.name}</div><div class="label-dot"></div>`;
+    el.addEventListener('mouseenter',()=>showPreview(i,el));
+    el.addEventListener('mouseleave',hidePreview);
+    el.addEventListener('click',e=>{e.stopPropagation();enterLocation(i);});
+    container.appendChild(el);
+    labelElements.push(el);
+  });
+}
+
+function updateLabelPositions() {
+  const hw=window.innerWidth/2,hh=window.innerHeight/2;
+  locations.forEach((loc,i)=>{
+    const p=geoTo3D(loc.lat,loc.lon);
+    const v=new THREE.Vector3(p.x,14,p.z).project(camera);
+    const el=labelElements[i];
+    if(v.z>1||v.z<-1){el.style.display='none';return;}
+    el.style.display='flex';
+    el.style.left=(v.x*hw+hw)+'px';
+    el.style.top=(-v.y*hh+hh)+'px';
+    el.style.opacity=String(Math.max(0,Math.min(1,3-Math.abs(v.z)*5)));
+  });
+}
+
+// ============================================================
+//  PREVIEW
+// ============================================================
+function showPreview(index,anchorEl) {
+  if(appState!=='hub')return;
+  hoveredIndex=index;
+  const loc=locations[index];
+  const card=document.getElementById('preview-card');
+  const realImg=document.getElementById('preview-real-img');
+  const placeholder=document.getElementById('preview-img');
+  if(loc.image){
+    realImg.src=loc.image; realImg.alt=loc.name;
+    realImg.style.display='block'; placeholder.style.display='none';
+    realImg.onerror=()=>{
+      realImg.style.display='none'; placeholder.style.display='flex';
+      placeholder.style.setProperty('--preview-gradient',loc.gradient);
+      placeholder.textContent=loc.icon;
+    };
+  } else {
+    realImg.style.display='none'; placeholder.style.display='flex';
+    placeholder.style.setProperty('--preview-gradient',loc.gradient);
+    placeholder.textContent=loc.icon;
+  }
+  document.getElementById('preview-name').textContent=loc.name;
+  document.getElementById('preview-name-fa').textContent=loc.nameFa;
+  document.getElementById('preview-desc').textContent=loc.desc;
+
+  const rect=anchorEl.getBoundingClientRect();
+  let left=rect.left+rect.width/2-145, top=rect.top-350;
+  if(left<10)left=10;
+  if(left+290>window.innerWidth-10)left=window.innerWidth-300;
+  if(top<10)top=rect.bottom+10;
+
+  card.style.left=left+'px'; card.style.top=top+'px';
+  card.classList.add('visible');
+
+  const m=markerGroups[index];
+  m.crystalWire.material.opacity=1; m.crystalSolid.material.opacity=0.5;
+  m.beam.material.opacity=0.25; m.ring.material.opacity=0.4; m.light.intensity=6;
+}
+
+function hidePreview() {
+  hoveredIndex=-1;
+  document.getElementById('preview-card').classList.remove('visible');
+  markerGroups.forEach(m=>{
+    m.crystalWire.material.opacity=0.8; m.crystalSolid.material.opacity=0.25;
+    m.beam.material.opacity=0.1; m.ring.material.opacity=0.2; m.light.intensity=3;
+  });
+}
+
+// ============================================================
+//  INTERACTION
+// ============================================================
+const raycaster=new THREE.Raycaster();
+const mouse=new THREE.Vector2();
+
+function onMouseMove(e) {
+  mouse.x=(e.clientX/window.innerWidth)*2-1;
+  mouse.y=-(e.clientY/window.innerHeight)*2+1;
+  if(appState!=='hub')return;
+  raycaster.setFromCamera(mouse,camera);
+  renderer.domElement.style.cursor=raycaster.intersectObjects(hitMeshes).length>0?'pointer':'grab';
+}
+
+function onClick() {
+  if(appState!=='hub')return;
+  raycaster.setFromCamera(mouse,camera);
+  const hits=raycaster.intersectObjects(hitMeshes);
+  if(hits.length>0) enterLocation(hits[0].object.userData.locationIndex);
+}
+
+function onTouchEnd(e) {
+  if(appState!=='hub'||!e.changedTouches.length)return;
+  const t=e.changedTouches[0];
+  mouse.x=(t.clientX/window.innerWidth)*2-1;
+  mouse.y=-(t.clientY/window.innerHeight)*2+1;
+  raycaster.setFromCamera(mouse,camera);
+  const hits=raycaster.intersectObjects(hitMeshes);
+  if(hits.length>0) enterLocation(hits[0].object.userData.locationIndex);
+}
+
+// ============================================================
+//  ENTER / EXIT LOCATION
+// ============================================================
+let locScene, locCamera, locRenderer, locControls, locAnimId;
+let locCleanup = null;
+
+function enterLocation(index) {
+  if(appState!=='hub')return;
+  appState='transitioning';
+  hidePreview();
+  const loc=locations[index];
+  const overlay=document.getElementById('transition-overlay');
+  overlay.classList.add('active');
+
+  setTimeout(()=>{
+    document.getElementById('hub-title').style.opacity='0';
+    document.getElementById('labels-container').style.opacity='0';
+    document.getElementById('instructions').style.opacity='0';
+    document.getElementById('compass').style.opacity='0';
+
+    // Check if this location has an immersive 3D builder
+    const builder = locationBuilders[loc.id];
+    if (builder) {
+      startImmersiveLocation(loc, builder);
+    } else {
+      // Fallback: placeholder screen
+      const view=document.getElementById('location-view');
+      document.getElementById('loc-bg').style.setProperty('--loc-gradient',loc.gradient);
+      document.getElementById('loc-icon').textContent=loc.icon;
+      document.getElementById('loc-name').textContent=loc.name;
+      document.getElementById('loc-name-fa').textContent=loc.nameFa;
+      document.getElementById('loc-desc').textContent=loc.desc;
+      view.querySelector('.loc-view-content').classList.add('visible');
+      view.classList.add('active');
+      document.getElementById('back-btn').classList.add('visible');
+      appState='location';
+    }
+    setTimeout(()=>overlay.classList.remove('active'),100);
+  },600);
+}
+
+function startImmersiveLocation(loc, builder) {
+  const view = document.getElementById('location-view');
+  view.querySelector('.loc-view-content').classList.remove('visible');
+  view.style.background='transparent';
+  document.getElementById('loc-bg').style.display='none';
+  view.classList.add('active');
+
+  // Create renderer for location
+  locScene = new THREE.Scene();
+  locCamera = new THREE.PerspectiveCamera(70, window.innerWidth/window.innerHeight, 0.1, 1000);
+  locRenderer = new THREE.WebGLRenderer({ antialias: true });
+  locRenderer.setSize(window.innerWidth, window.innerHeight);
+  locRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  locRenderer.toneMapping = THREE.ACESFilmicToneMapping;
+  locRenderer.toneMappingExposure = 1.2;
+  view.insertBefore(locRenderer.domElement, view.firstChild);
+
+  locControls = new OrbitControls(locCamera, locRenderer.domElement);
+  locControls.enableDamping = true;
+  locControls.dampingFactor = 0.06;
+  locControls.enablePan = false;
+  locControls.autoRotate = true;
+  locControls.autoRotateSpeed = 0.3;
+  locControls.zoomSpeed = 2.5;
+
+  // Build the scene
+  locCleanup = builder(locScene, locCamera, locControls);
+
+  // Info panel
+  document.getElementById('loc-panel-name').textContent = loc.name;
+  document.getElementById('loc-panel-fa').textContent = loc.nameFa;
+  document.getElementById('loc-panel-desc').textContent = loc.desc;
+  document.getElementById('loc-info-panel').classList.add('visible');
+  document.getElementById('back-btn').classList.add('visible');
+
+  // Hint
+  const hint = document.getElementById('loc-hint');
+  hint.classList.add('visible');
+  setTimeout(()=>hint.classList.remove('visible'), 4000);
+
+  appState='location';
+
+  // Resize handler
+  const onLocResize = () => {
+    locCamera.aspect = window.innerWidth/window.innerHeight;
+    locCamera.updateProjectionMatrix();
+    locRenderer.setSize(window.innerWidth, window.innerHeight);
+  };
+  window.addEventListener('resize', onLocResize);
+
+  // Animation loop
+  const locClock = new THREE.Clock();
+  function locAnimate() {
+    locAnimId = requestAnimationFrame(locAnimate);
+    const dt = locClock.getElapsedTime();
+    locControls.update();
+    if(locCleanup && locCleanup.update) locCleanup.update(dt);
+    locRenderer.render(locScene, locCamera);
+  }
+  locAnimate();
+
+  // Store resize ref for cleanup
+  locCleanup._onResize = onLocResize;
+}
+
+window.exitLocation=function(){
+  if(appState!=='location')return;
+  appState='transitioning';
+  const overlay=document.getElementById('transition-overlay');
+  overlay.classList.add('active');
+  setTimeout(()=>{
+    // Cleanup immersive scene if active
+    if(locAnimId) { cancelAnimationFrame(locAnimId); locAnimId=null; }
+    if(locCleanup) {
+      if(locCleanup._onResize) window.removeEventListener('resize', locCleanup._onResize);
+      if(locCleanup.dispose) locCleanup.dispose();
+      locCleanup=null;
+    }
+    if(locRenderer) {
+      locRenderer.domElement.remove();
+      locRenderer.dispose();
+      locRenderer=null;
+    }
+    locScene=null; locCamera=null; locControls=null;
+
+    document.getElementById('location-view').classList.remove('active');
+    document.getElementById('location-view').style.background='#050510';
+    document.getElementById('location-view').querySelector('.loc-view-content').classList.remove('visible');
+    document.getElementById('loc-bg').style.display='';
+    document.getElementById('loc-info-panel').classList.remove('visible');
+    document.getElementById('back-btn').classList.remove('visible');
+    document.getElementById('loc-hint').classList.remove('visible');
+    document.getElementById('hub-title').style.opacity='1';
+    document.getElementById('labels-container').style.opacity='1';
+    document.getElementById('compass').style.opacity='1';
+    appState='hub';
+    setTimeout(()=>overlay.classList.remove('active'),100);
+  },600);
+};
+
+// ============================================================
+//  LOCATION BUILDERS REGISTRY
+// ============================================================
+const locationBuilders = {};
+
+// ============================================================
+//  NASIR AL-MULK MOSQUE — Immersive 3D
+// ============================================================
+locationBuilders['nasir-al-mulk'] = function(scene, camera, controls) {
+  // Camera setup: inside the mosque looking around
+  camera.position.set(0, 3.5, 0);
+  controls.target.set(0, 3.5, -5);
+  controls.minDistance = 0.1;
+  controls.maxDistance = 12;
+  controls.maxPolarAngle = Math.PI * 0.85;
+  controls.minPolarAngle = Math.PI * 0.1;
+  controls.autoRotateSpeed = 0.15;
+
+  // Ambient warm light
+  scene.fog = new THREE.FogExp2(0x1a0a1e, 0.018);
+  const ambient = new THREE.AmbientLight(0x2a1535, 0.6);
+  scene.add(ambient);
+
+  // --- FLOOR: ornate tiled floor ---
+  const floorGeo = new THREE.PlaneGeometry(30, 30);
+  const floorMat = new THREE.ShaderMaterial({
+    side: THREE.DoubleSide,
+    vertexShader: `
+      varying vec2 vUv;
+      void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }
+    `,
+    fragmentShader: `
+      varying vec2 vUv;
+      void main() {
+        vec2 uv = vUv * 15.0;
+        vec2 grid = abs(fract(uv - 0.5) - 0.5);
+        float tile = smoothstep(0.0, 0.04, min(grid.x, grid.y));
+        // Inner pattern
+        vec2 inner = fract(uv) - 0.5;
+        float diamond = abs(inner.x) + abs(inner.y);
+        float pattern = smoothstep(0.3, 0.28, diamond) * 0.3;
+        // Colors: warm cream tiles with rosa accents
+        vec3 base = vec3(0.55, 0.42, 0.35);
+        vec3 accent = vec3(0.72, 0.35, 0.45);
+        vec3 c = mix(accent, base, tile);
+        c += pattern * vec3(0.15, 0.08, 0.12);
+        // Reflection shimmer
+        c *= 0.5 + 0.5 * smoothstep(15.0, 0.0, length(vUv - 0.5) * 30.0);
+        gl_FragColor = vec4(c, 1.0);
+      }
+    `
+  });
+  const floor = new THREE.Mesh(floorGeo, floorMat);
+  floor.rotation.x = -Math.PI/2;
+  floor.position.y = 0;
+  scene.add(floor);
+
+  // --- COLUMNS: two rows of ornate columns ---
+  const columns = [];
+  const colPositions = [];
+  for(let row = -1; row <= 1; row += 2) {
+    for(let i = -3; i <= 3; i++) {
+      colPositions.push({ x: row * 4.5, z: i * 4 });
+    }
+  }
+  colPositions.forEach(pos => {
+    const colGroup = new THREE.Group();
+    // Main shaft
+    const shaft = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.28, 0.32, 7, 16),
+      new THREE.ShaderMaterial({
+        vertexShader: `
+          varying vec2 vUv; varying vec3 vNormal;
+          void main() { vUv = uv; vNormal = normalMatrix * normal; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }
+        `,
+        fragmentShader: `
+          varying vec2 vUv; varying vec3 vNormal;
+          void main() {
+            float stripe = sin(vUv.y * 80.0) * 0.5 + 0.5;
+            float twist = sin(vUv.y * 12.0 + vUv.x * 6.28 * 3.0) * 0.5 + 0.5;
+            vec3 pink = vec3(0.85, 0.45, 0.55);
+            vec3 cream = vec3(0.90, 0.82, 0.70);
+            vec3 blue = vec3(0.35, 0.50, 0.75);
+            vec3 c = mix(pink, cream, stripe);
+            c = mix(c, blue, twist * 0.25);
+            // Lighting
+            float light = dot(vNormal, normalize(vec3(0.3, 1.0, 0.5))) * 0.5 + 0.5;
+            c *= 0.6 + light * 0.5;
+            gl_FragColor = vec4(c, 1.0);
+          }
+        `
+      })
+    );
+    shaft.position.y = 3.5;
+    colGroup.add(shaft);
+
+    // Base
+    const base = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.45, 0.5, 0.6, 16),
+      new THREE.MeshBasicMaterial({ color: 0x8a7060 })
+    );
+    colGroup.add(base);
+
+    // Capital (top)
+    const capital = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.5, 0.3, 0.5, 8),
+      new THREE.MeshBasicMaterial({ color: 0x9a8070 })
+    );
+    capital.position.y = 7;
+    colGroup.add(capital);
+
+    colGroup.position.set(pos.x, 0, pos.z);
+    scene.add(colGroup);
+    columns.push(colGroup);
+  });
+
+  // --- CEILING: ornate vaulted ceiling with muqarnas-like pattern ---
+  const ceilGeo = new THREE.PlaneGeometry(30, 30, 60, 60);
+  // Displace vertices to create vault shapes
+  const ceilPos = ceilGeo.attributes.position;
+  for(let i = 0; i < ceilPos.count; i++) {
+    const x = ceilPos.getX(i), y = ceilPos.getY(i);
+    // Create repeating vault domes
+    const cellX = Math.sin(x * 0.7) * Math.sin(y * 0.7);
+    const vault = Math.max(0, cellX) * 1.2;
+    ceilPos.setZ(i, -vault);
+  }
+  ceilGeo.computeVertexNormals();
+  const ceilMat = new THREE.ShaderMaterial({
+    side: THREE.DoubleSide,
+    vertexShader: `
+      varying vec2 vUv; varying vec3 vPos; varying vec3 vNormal;
+      void main() {
+        vUv = uv; vPos = position; vNormal = normalMatrix * normal;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0);
+      }
+    `,
+    fragmentShader: `
+      varying vec2 vUv; varying vec3 vPos; varying vec3 vNormal;
+      void main() {
+        vec2 uv = vUv * 8.0;
+        // Geometric star pattern
+        vec2 cell = fract(uv) - 0.5;
+        float star = abs(cell.x) + abs(cell.y);
+        float ring = abs(length(cell) - 0.3);
+        float pattern = smoothstep(0.03, 0.0, ring) + smoothstep(0.35, 0.32, star) * 0.5;
+        // Color palette: rich Islamic art colors
+        vec3 deepBlue = vec3(0.10, 0.15, 0.45);
+        vec3 gold     = vec3(0.85, 0.68, 0.25);
+        vec3 turquoise = vec3(0.20, 0.65, 0.70);
+        vec3 rose     = vec3(0.75, 0.30, 0.40);
+        float sector = floor(mod(atan(cell.y, cell.x) / 6.283 * 8.0 + 4.0, 4.0));
+        vec3 col = deepBlue;
+        if(sector < 1.0) col = mix(deepBlue, gold, pattern);
+        else if(sector < 2.0) col = mix(deepBlue, turquoise, pattern);
+        else if(sector < 3.0) col = mix(deepBlue, rose, pattern);
+        else col = mix(deepBlue, gold, pattern * 0.7);
+        col += pattern * 0.15;
+        // Lighting from below
+        float light = dot(vNormal, normalize(vec3(0.0, -1.0, 0.3))) * 0.5 + 0.5;
+        col *= 0.4 + light * 0.6;
+        gl_FragColor = vec4(col, 1.0);
+      }
+    `
+  });
+  const ceiling = new THREE.Mesh(ceilGeo, ceilMat);
+  ceiling.rotation.x = Math.PI/2;
+  ceiling.position.y = 7.5;
+  scene.add(ceiling);
+
+  // --- WALLS: with stained glass windows ---
+  function createWall(width, height, posVec, rotY) {
+    const wallGeo = new THREE.PlaneGeometry(width, height, 1, 1);
+    const wallMat = new THREE.ShaderMaterial({
+      side: THREE.DoubleSide,
+      vertexShader: `
+        varying vec2 vUv;
+        void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }
+      `,
+      fragmentShader: `
+        varying vec2 vUv;
+        void main() {
+          // Base wall: warm plaster
+          vec3 wall = vec3(0.65, 0.52, 0.45);
+          // Tile band at bottom
+          float tileBand = smoothstep(0.0, 0.35, vUv.y);
+          vec2 tileUv = vUv * vec2(12.0, 6.0);
+          vec2 tGrid = abs(fract(tileUv) - 0.5);
+          float tilePattern = smoothstep(0.02, 0.0, min(tGrid.x, tGrid.y));
+          vec3 tileCol = mix(vec3(0.25, 0.50, 0.65), vec3(0.80, 0.35, 0.50), sin(tileUv.x * 3.14) * 0.5 + 0.5);
+          tileCol += tilePattern * 0.3;
+          vec3 c = mix(tileCol, wall, tileBand);
+          // Darken edges
+          c *= 0.7 + 0.3 * smoothstep(0.0, 0.5, min(vUv.x, 1.0 - vUv.x));
+          gl_FragColor = vec4(c * 0.6, 1.0);
+        }
+      `
+    });
+    const wall = new THREE.Mesh(wallGeo, wallMat);
+    wall.position.copy(posVec);
+    wall.rotation.y = rotY;
+    scene.add(wall);
+    return wall;
+  }
+  // Side walls
+  createWall(30, 7.5, new THREE.Vector3(-7.5, 3.75, 0), Math.PI/2);
+  createWall(30, 7.5, new THREE.Vector3(7.5, 3.75, 0), -Math.PI/2);
+  // Back wall
+  createWall(15, 7.5, new THREE.Vector3(0, 3.75, -15), 0);
+  // Front wall (with stained glass openings)
+  createWall(15, 7.5, new THREE.Vector3(0, 3.75, 15), Math.PI);
+
+  // --- STAINED GLASS WINDOWS (left wall) ---
+  for(let i = -2; i <= 2; i++) {
+    const winGeo = new THREE.PlaneGeometry(1.8, 3.5);
+    const winMat = new THREE.ShaderMaterial({
+      transparent: true, side: THREE.DoubleSide,
+      uniforms: { uTime: { value: 0 } },
+      vertexShader: `
+        varying vec2 vUv;
+        void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }
+      `,
+      fragmentShader: `
+        uniform float uTime;
+        varying vec2 vUv;
+        void main() {
+          vec2 uv = vUv;
+          // Arched window shape
+          float arch = smoothstep(0.0, 0.08, uv.x) * smoothstep(1.0, 0.92, uv.x);
+          float top = 1.0 - smoothstep(0.7, 1.0, uv.y) * (1.0 - smoothstep(0.0, 0.5, abs(uv.x - 0.5)));
+          arch *= top;
+          // Stained glass colors — kaleidoscopic
+          float angle = atan(uv.y - 0.5, uv.x - 0.5);
+          float radius = length(uv - 0.5);
+          float petal = sin(angle * 6.0 + uTime * 0.3) * 0.5 + 0.5;
+          float ring = sin(radius * 18.0 - uTime * 0.5) * 0.5 + 0.5;
+          vec3 red    = vec3(0.90, 0.20, 0.25);
+          vec3 yellow = vec3(0.95, 0.80, 0.15);
+          vec3 blue   = vec3(0.15, 0.35, 0.85);
+          vec3 green  = vec3(0.15, 0.70, 0.35);
+          vec3 pink   = vec3(0.90, 0.40, 0.60);
+          vec3 c = mix(red, yellow, petal);
+          c = mix(c, blue, ring * 0.4);
+          c = mix(c, green, sin(angle * 4.0) * 0.3 + 0.15);
+          c = mix(c, pink, smoothstep(0.3, 0.0, radius) * 0.4);
+          // Lead lines
+          float lead = smoothstep(0.02, 0.0, abs(sin(angle * 6.0)) * radius);
+          lead += smoothstep(0.02, 0.0, abs(fract(radius * 6.0) - 0.5));
+          c = mix(c, vec3(0.05), min(lead, 1.0) * 0.6);
+          // Glow: light pouring through
+          float glow = (0.8 + 0.2 * sin(uTime * 0.7 + float(${i}) * 1.5)) * arch;
+          gl_FragColor = vec4(c * (0.8 + glow * 0.6), arch * 0.92);
+        }
+      `
+    });
+    const win = new THREE.Mesh(winGeo, winMat);
+    win.position.set(-7.45, 4.2, i * 4.5);
+    win.rotation.y = Math.PI/2;
+    scene.add(win);
+
+    // Light casting colored light from window
+    const colors = [0xe91e63, 0xffc107, 0x2196f3, 0x4caf50, 0xe91e63];
+    const wLight = new THREE.PointLight(colors[i+2], 2.5, 10, 2);
+    wLight.position.set(-5.5, 3.5, i * 4.5);
+    scene.add(wLight);
+
+    // Light rays (volumetric cones)
+    const rayGeo = new THREE.CylinderGeometry(0.05, 2.5, 8, 8, 1, true);
+    const rayMat = new THREE.MeshBasicMaterial({
+      color: colors[i+2], transparent: true, opacity: 0.04,
+      blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide
+    });
+    const ray = new THREE.Mesh(rayGeo, rayMat);
+    ray.position.set(-4, 3, i * 4.5);
+    ray.rotation.z = -Math.PI/4;
+    scene.add(ray);
+  }
+
+  // --- CARPET (prayer rugs) ---
+  const carpetGeo = new THREE.PlaneGeometry(6, 10);
+  const carpetMat = new THREE.ShaderMaterial({
+    side: THREE.DoubleSide,
+    vertexShader: `
+      varying vec2 vUv;
+      void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }
+    `,
+    fragmentShader: `
+      varying vec2 vUv;
+      void main() {
+        vec2 uv = vUv;
+        // Carpet border
+        float border = smoothstep(0.0, 0.06, min(min(uv.x, 1.0-uv.x), min(uv.y, 1.0-uv.y)));
+        float inner = smoothstep(0.06, 0.10, min(min(uv.x, 1.0-uv.x), min(uv.y, 1.0-uv.y)));
+        // Central medallion
+        float d = length((uv - 0.5) * vec2(1.0, 1.6));
+        float medallion = smoothstep(0.35, 0.30, d);
+        float ring2 = smoothstep(0.02, 0.0, abs(d - 0.25));
+        // Colors
+        vec3 crimson = vec3(0.60, 0.08, 0.12);
+        vec3 navy    = vec3(0.08, 0.08, 0.28);
+        vec3 gold2   = vec3(0.80, 0.62, 0.15);
+        vec3 ivory   = vec3(0.90, 0.85, 0.72);
+        vec3 c = crimson;
+        c = mix(c, navy, medallion * 0.6);
+        c += gold2 * ring2 * 0.8;
+        c = mix(gold2, c, border);
+        c = mix(ivory * 0.5, c, inner);
+        gl_FragColor = vec4(c * 0.55, 1.0);
+      }
+    `
+  });
+  const carpet = new THREE.Mesh(carpetGeo, carpetMat);
+  carpet.rotation.x = -Math.PI/2;
+  carpet.position.set(0, 0.02, 0);
+  scene.add(carpet);
+
+  // --- FLOATING DUST PARTICLES in light beams ---
+  const dustN = 500;
+  const dustPos = new Float32Array(dustN * 3);
+  const dustSz = new Float32Array(dustN);
+  for(let i=0;i<dustN;i++) {
+    dustPos[i*3] = (Math.random()-0.5) * 14;
+    dustPos[i*3+1] = Math.random() * 7;
+    dustPos[i*3+2] = (Math.random()-0.5) * 28;
+    dustSz[i] = Math.random() * 1.5 + 0.3;
+  }
+  const dustGeo = new THREE.BufferGeometry();
+  dustGeo.setAttribute('position', new THREE.BufferAttribute(dustPos, 3));
+  dustGeo.setAttribute('size', new THREE.BufferAttribute(dustSz, 1));
+  const dustUni = { uTime: { value: 0 } };
+  const dustMat = new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+    uniforms: dustUni,
+    vertexShader: `
+      attribute float size; uniform float uTime; varying float vA;
+      void main() {
+        vec3 p = position;
+        p.y += sin(uTime * 0.3 + position.x * 2.0) * 0.4;
+        p.x += cos(uTime * 0.2 + position.z) * 0.2;
+        vec4 mv = modelViewMatrix * vec4(p, 1.0);
+        gl_PointSize = size * (100.0 / -mv.z);
+        gl_Position = projectionMatrix * mv;
+        // Brighter near left wall (windows)
+        float windowProx = smoothstep(2.0, -6.0, p.x) * smoothstep(0.0, 3.0, p.y);
+        vA = (0.15 + windowProx * 0.5) * smoothstep(200.0, 5.0, -mv.z);
+      }
+    `,
+    fragmentShader: `
+      varying float vA;
+      void main() {
+        float d = length(gl_PointCoord - 0.5);
+        float a = smoothstep(0.5, 0.0, d) * vA;
+        gl_FragColor = vec4(1.0, 0.92, 0.75, a);
+      }
+    `
+  });
+  scene.add(new THREE.Points(dustGeo, dustMat));
+
+  // --- COLOR FLOOR PROJECTIONS (light on the floor from windows) ---
+  for(let i = -2; i <= 2; i++) {
+    const projGeo = new THREE.PlaneGeometry(3, 5);
+    const colors2 = [0xe91e63, 0xffc107, 0x2196f3, 0x4caf50, 0xff5722];
+    const projMat = new THREE.MeshBasicMaterial({
+      color: colors2[i+2], transparent: true, opacity: 0.08,
+      blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide
+    });
+    const proj = new THREE.Mesh(projGeo, projMat);
+    proj.rotation.x = -Math.PI/2;
+    proj.position.set(-2.5, 0.05, i * 4.5);
+    scene.add(proj);
+  }
+
+  // Collect animatable materials
+  const windowMats = [];
+  scene.traverse(o => {
+    if(o.material && o.material.uniforms && o.material.uniforms.uTime && o.material !== dustMat) {
+      windowMats.push(o.material);
+    }
+  });
+
+  return {
+    update(t) {
+      dustUni.uTime.value = t;
+      windowMats.forEach(m => { m.uniforms.uTime.value = t; });
+    },
+    dispose() {
+      // Cleanup would go here for heavy assets
+    }
+  };
+};
+
+// ============================================================
+//  RESIZE
+// ============================================================
+function onResize() {
+  camera.aspect=window.innerWidth/window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth,window.innerHeight);
+}
+
+// ============================================================
+//  ANIMATE
+// ============================================================
+function animate() {
+  requestAnimationFrame(animate);
+  const t=clock.getElapsedTime();
+  controls.update();
+  if(particleUniforms) particleUniforms.uTime.value=t;
+
+  // Star twinkle
+  scene.traverse(o=>{
+    if(o.userData.mat&&o.userData.mat.uniforms.uTime) o.userData.mat.uniforms.uTime.value=t;
+    if(o.userData.seaMat) o.userData.seaMat.uniforms.uTime.value=t;
+  });
+
+  // Connection flow particles
+  connectionMeshes.forEach(obj => {
+    if(obj.userData.curve) {
+      const curve = obj.userData.curve;
+      const n = obj.userData.flowN;
+      const posAttr = obj.geometry.attributes.position;
+      for(let i=0;i<n;i++) {
+        const prog = ((t * 0.12 + i / n) % 1.0);
+        const pt = curve.getPoint(prog);
+        posAttr.setXYZ(i, pt.x, pt.y, pt.z);
+      }
+      posAttr.needsUpdate = true;
+    }
+  });
+
+  // Markers
+  markerGroups.forEach((m,i)=>{
+    const s=t+i*1.1;
+    m.crystalWire.position.y=8+Math.sin(s*0.8)*0.8;
+    m.crystalSolid.position.y=m.crystalWire.position.y;
+    m.crystalWire.rotation.y=s*0.3;
+    m.crystalSolid.rotation.y=s*0.3;
+    m.crystalWire.rotation.x=Math.sin(s*0.2)*0.15;
+    m.crystalSolid.rotation.x=m.crystalWire.rotation.x;
+    const p=0.85+Math.sin(s*1.2)*0.15;
+    m.ring.scale.set(p,p,p);
+    if(hoveredIndex!==i) m.light.intensity=2.5+Math.sin(s*1.5)*0.8;
+  });
+
+  // Compass rotation (tracks camera azimuth)
+  updateCompass();
+
+  // Geo reference labels
+  updateGeoLabels();
+
+  if(appState==='hub') updateLabelPositions();
+  renderer.render(scene,camera);
+}
+
+// ============================================================
+//  COMPASS
+// ============================================================
+function updateCompass() {
+  // Camera azimuth: angle of camera around Y looking at target
+  const dx = camera.position.x - controls.target.x;
+  const dz = camera.position.z - controls.target.z;
+  const angle = Math.atan2(dx, dz); // radians, 0 = looking from +Z
+  // In our coordinate system, -Z = North (higher lat), so angle 0 = looking from south
+  const deg = angle * (180 / Math.PI);
+  const needleN = document.getElementById('compass-needle-n');
+  const needleS = document.getElementById('compass-needle-s');
+  const compassN = document.getElementById('compass-N');
+  const compassS = document.getElementById('compass-S');
+  const compassE = document.getElementById('compass-E');
+  const compassW = document.getElementById('compass-W');
+  if (!needleN) return;
+  const svg = document.querySelector('#compass svg');
+  // Rotate inner content
+  const inner = `rotate(${deg}, 50, 50)`;
+  needleN.setAttribute('transform', inner);
+  needleS.setAttribute('transform', inner);
+  // Place cardinal letters at rotated positions
+  const r = 44;
+  const dirs = [
+    { el: compassN, a: deg },
+    { el: compassS, a: deg + 180 },
+    { el: compassE, a: deg + 90 },
+    { el: compassW, a: deg - 90 },
+  ];
+  dirs.forEach(({ el, a }) => {
+    const rad = a * Math.PI / 180;
+    el.setAttribute('x', 50 + Math.sin(rad) * r);
+    el.setAttribute('y', 50 - Math.cos(rad) * r + 4);
+  });
+}
+
+// ============================================================
+//  GEO LABEL POSITIONS
+// ============================================================
+function updateGeoLabels() {
+  if (appState !== 'hub') return;
+  const hw = window.innerWidth / 2, hh = window.innerHeight / 2;
+  const container = document.getElementById('labels-container');
+  const geoEls = container.querySelectorAll('[data-geo-lat]');
+  geoEls.forEach(el => {
+    const lat = parseFloat(el.dataset.geoLat);
+    const lon = parseFloat(el.dataset.geoLon);
+    const p = geoTo3D(lat, lon);
+    const v = new THREE.Vector3(p.x, 1, p.z).project(camera);
+    if (v.z > 1 || v.z < -1) { el.style.display = 'none'; return; }
+    el.style.display = 'block';
+    el.style.left = (v.x * hw + hw) + 'px';
+    el.style.top = (-v.y * hh + hh) + 'px';
+    el.style.transform = 'translate(-50%, -50%)';
+  });
+}
+
+init();
+</script>
+</body>
+</html>
