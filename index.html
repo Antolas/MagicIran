@@ -398,7 +398,7 @@
     #compass { width: 60px; height: 60px; bottom: 20px; right: 20px; }
   }
 </style>
-<script src="https://code.responsivevoice.org/responsivevoice.js?key=FREE"></script>
+
 </head>
 <body>
 
@@ -3794,21 +3794,63 @@ const TourController = {
   _speak(text) {
     if (!this._voiceOn) return;
     this._stopSpeech();
-    if (window.responsiveVoice && responsiveVoice.voiceSupport()) {
-      responsiveVoice.speak(text, 'Italian Female', { rate: 0.9, pitch: 1.0, volume: 1.0 });
-    } else if (window.speechSynthesis) {
-      // Fallback a Web Speech API
-      const utt = new SpeechSynthesisUtterance(text);
-      utt.lang = 'it-IT'; utt.rate = 0.92;
-      const voices = speechSynthesis.getVoices();
-      const v = voices.find(x => x.lang.startsWith('it') && x.localService) || voices.find(x => x.lang.startsWith('it'));
-      if (v) utt.voice = v;
-      speechSynthesis.speak(utt);
+    // Tronca testo a max 200 char per chunk (limite endpoint Google TTS)
+    const chunks = this._chunkText(text, 190);
+    this._audioQueue = chunks;
+    this._audioIdx = 0;
+    this._playNext();
+  },
+
+  _playNext() {
+    if (!this._voiceOn || !this._audioQueue || this._audioIdx >= this._audioQueue.length) return;
+    const chunk = this._audioQueue[this._audioIdx];
+    const url = 'https://translate.google.com/translate_tts?ie=UTF-8' +
+      '&q=' + encodeURIComponent(chunk) +
+      '&tl=it&client=tw-ob&ttsspeed=0.88';
+    const audio = new Audio(url);
+    audio.volume = 1.0;
+    this._currentAudio = audio;
+    audio.onended = () => {
+      this._audioIdx++;
+      this._playNext();
+    };
+    audio.onerror = () => {
+      // Fallback Web Speech API se Google blocca
+      if (window.speechSynthesis) {
+        const remaining = this._audioQueue.slice(this._audioIdx).join(' ');
+        const utt = new SpeechSynthesisUtterance(remaining);
+        utt.lang = 'it-IT'; utt.rate = 0.92;
+        const v = speechSynthesis.getVoices().find(x => x.lang.startsWith('it'));
+        if (v) utt.voice = v;
+        speechSynthesis.speak(utt);
+      }
+      this._audioQueue = [];
+    };
+    audio.play().catch(() => { audio.onerror(); });
+  },
+
+  _chunkText(text, maxLen) {
+    const words = text.split(' ');
+    const chunks = [];
+    let cur = '';
+    for (const w of words) {
+      const candidate = cur ? cur + ' ' + w : w;
+      if (candidate.length > maxLen) {
+        if (cur) chunks.push(cur);
+        cur = w;
+      } else { cur = candidate; }
     }
+    if (cur) chunks.push(cur);
+    return chunks;
   },
 
   _stopSpeech() {
-    if (window.responsiveVoice) responsiveVoice.cancel();
+    if (this._currentAudio) {
+      this._currentAudio.pause();
+      this._currentAudio.src = '';
+      this._currentAudio = null;
+    }
+    this._audioQueue = [];
     if (window.speechSynthesis) speechSynthesis.cancel();
   },
 
@@ -3885,14 +3927,6 @@ document.getElementById('tour-exit-btn').addEventListener('click', () => {
 // Bottone voce narrante
 (function() {
   const btn = document.getElementById('tour-voice-btn');
-  // Pre-carica voce ResponsiveVoice al primo click utente (politica autoplay browser)
-  document.addEventListener('click', () => {
-    if (window.responsiveVoice) responsiveVoice.init();
-  }, { once: true });
-  // Fallback Web Speech API
-  if (window.speechSynthesis && speechSynthesis.onvoiceschanged !== undefined) {
-    speechSynthesis.onvoiceschanged = () => speechSynthesis.getVoices();
-  }
   btn.addEventListener('click', () => {
     TourController._voiceOn = !TourController._voiceOn;
     btn.textContent = TourController._voiceOn ? '🔊' : '🔇';
