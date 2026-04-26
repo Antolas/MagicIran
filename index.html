@@ -323,8 +323,43 @@
   }
   #tour-counter.visible { display: block; }
 
+  /* Pannello immagine tour */
+  #tour-img-panel {
+    position: fixed;
+    left: 50%; top: 44%;
+    transform: translate(-50%, -50%) perspective(900px) rotateY(-4deg);
+    z-index: 420;
+    width: min(340px, 34vw);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.7s ease, transform 0.7s ease;
+  }
+  #tour-img-panel.visible {
+    opacity: 1;
+    transform: translate(-50%, -50%) perspective(900px) rotateY(0deg);
+  }
+  #tour-img-panel .tip-img {
+    width: 100%;
+    aspect-ratio: 4/3;
+    object-fit: cover;
+    display: block;
+    border-radius: 10px;
+    border: 1px solid rgba(255,255,255,0.22);
+    box-shadow:
+      0 0 0 4px rgba(0,0,0,0.55),
+      0 30px 90px rgba(0,0,0,0.85),
+      inset 0 0 0 1px rgba(255,255,255,0.06);
+  }
+  #tour-img-panel .tip-caption {
+    text-align: center;
+    font-size: 0.68rem;
+    letter-spacing: 0.06em;
+    color: rgba(255,255,255,0.38);
+    margin-top: 9px;
+    font-style: italic;
+  }
+
   /* Photo Strip */
-  #photo-strip {
     display: none;
     position: fixed; right: 14px; top: 50%; transform: translateY(-50%);
     z-index: 410;
@@ -463,6 +498,11 @@
 <div id="photo-lightbox">
   <button id="lb-close-btn" aria-label="Chiudi">&#x2715;</button>
   <img id="lb-img" src="" alt="">
+</div>
+
+<div id="tour-img-panel">
+  <img class="tip-img" id="tour-img" src="" alt="">
+  <div class="tip-caption" id="tour-img-caption"></div>
 </div>
 
 <button id="tour-start-btn">&#9654; Tour Guidato</button>
@@ -3600,13 +3640,16 @@ const tourScript = [
   { id: 'persepolis', steps: [
     { cam:[0,3.5,18], target:[0,4,0],
       label:'Persepolis · Tappa 1 di 3', title:'La Città dei Persiani',
-      text:'Fondata da Dario il Grande nel 518 a.C., Persepolis era il cuore cerimoniale dell\'Impero Achemenide — il più grande del mondo antico. Ogni pietra porta incisi i nomi di trenta nazioni conquistate.' },
+      text:'Fondata da Dario il Grande nel 518 a.C., Persepolis era il cuore cerimoniale dell\'Impero Achemenide — il più grande del mondo antico. Ogni pietra porta incisi i nomi di trenta nazioni conquistate.',
+      img: 'https://commons.wikimedia.org/wiki/Special:FilePath/Persepolis_2012.jpg?width=800' },
     { cam:[10,6,5], target:[0,5,0],
       label:'Persepolis · Tappa 2 di 3', title:'Le Cento Colonne',
-      text:'Il palazzo delle Cento Colonne poteva ospitare diecimila persone. Le colonne alte 20 metri sostenevano un tetto di cedro del Libano. Alessandro Magno lo incendiò nel 330 a.C. come atto simbolico di vendetta.' },
+      text:'Il palazzo delle Cento Colonne poteva ospitare diecimila persone. Le colonne alte 20 metri sostenevano un tetto di cedro del Libano. Alessandro Magno lo incendiò nel 330 a.C. come atto simbolico di vendetta.',
+      img: 'https://commons.wikimedia.org/wiki/Special:FilePath/Persepolis_Iran.jpg?width=800' },
     { cam:[-8,10,8], target:[0,4,0],
       label:'Persepolis · Tappa 3 di 3', title:'Il Portale delle Nazioni',
-      text:'Nel grande rilievo dell\'Apadana, delegazioni di 23 nazioni portano tributi al Re dei Re. È il più antico ritratto della "diversità delle genti" mai scolpito nella pietra.' },
+      text:'Nel grande rilievo dell\'Apadana, delegazioni di 23 nazioni portano tributi al Re dei Re. È il più antico ritratto della "diversità delle genti" mai scolpito nella pietra.',
+      img: 'https://commons.wikimedia.org/wiki/Special:FilePath/Gate_of_all_nations_persepolis.jpg?width=800' },
   ]},
   { id: 'nasir-al-mulk', steps: [
     { cam:[0,1.9,6], target:[0,3.2,-4],
@@ -3716,6 +3759,7 @@ const TourController = {
 
     if (appState === 'location') {
       // Transition between immersive locations
+      document.getElementById('tour-img-panel').classList.remove('visible');
       const overlay = document.getElementById('transition-overlay');
       overlay.classList.add('active');
       setTimeout(() => {
@@ -3753,6 +3797,18 @@ const TourController = {
     clearTimeout(this._typeTimer);
     this._typewriter(textEl, step.text);
     this._speak(step.title + '. ' + step.text);
+
+    // Pannello immagine
+    const panel = document.getElementById('tour-img-panel');
+    const imgEl = document.getElementById('tour-img');
+    panel.classList.remove('visible');
+    if (step.img) {
+      imgEl.src = '';
+      document.getElementById('tour-img-caption').textContent = step.title;
+      imgEl.onload = () => panel.classList.add('visible');
+      imgEl.onerror = () => {};
+      imgEl.src = step.img;
+    }
 
     // Camera lerp setup
     this._camFrom.copy(locCamera.position);
@@ -3891,6 +3947,7 @@ const TourController = {
     document.getElementById('tour-progress-wrap').classList.remove('visible');
     document.getElementById('tour-counter').classList.remove('visible');
     document.getElementById('tour-progress-bar').style.width = '0%';
+    document.getElementById('tour-img-panel').classList.remove('visible');
     if (locControls) { locControls.enabled = true; locControls.autoRotate = true; }
     window.exitLocation();
   },
