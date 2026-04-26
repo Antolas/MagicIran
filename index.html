@@ -301,6 +301,8 @@
   #tour-voice-btn:hover { background: rgba(255,255,255,0.16); }
   #tour-voice-btn.muted { color: rgba(255,255,255,0.25); }
   #tour-card { position: relative; }
+
+  #tour-progress-wrap {
     position: fixed; top: 0; left: 0; right: 0; z-index: 430;
     height: 3px; display: none;
     background: rgba(255,255,255,0.06);
@@ -3807,8 +3809,11 @@ const TourController = {
   _stopSpeech() {
     if (window.speechSynthesis) window.speechSynthesis.cancel();
   },
+
+  next() {
     clearTimeout(this._typeTimer);
     this._stopSpeech();
+    const entry = tourScript[this.locIdx];
     if (this.stepIdx < entry.steps.length - 1) {
       this.stepIdx++;
       this._showStep();
@@ -3824,6 +3829,7 @@ const TourController = {
   prev() {
     clearTimeout(this._typeTimer);
     this._stopSpeech();
+    if (this.stepIdx > 0) {
       this.stepIdx--;
       this._showStep();
     } else if (this.locIdx > 0) {
@@ -3837,6 +3843,7 @@ const TourController = {
     this.active = false;
     clearTimeout(this._typeTimer);
     this._stopSpeech();
+    document.getElementById('tour-card').classList.remove('visible');
     document.getElementById('tour-progress-wrap').classList.remove('visible');
     document.getElementById('tour-counter').classList.remove('visible');
     document.getElementById('tour-progress-bar').style.width = '0%';
