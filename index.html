@@ -237,6 +237,57 @@
   }
   #loc-hint.visible { opacity: 1; }
 
+  /* Photo Strip */
+  #photo-strip {
+    display: none;
+    position: fixed; right: 14px; top: 50%; transform: translateY(-50%);
+    z-index: 410;
+    flex-direction: column; gap: 8px;
+    max-height: 80vh; overflow-y: auto;
+    padding: 6px 4px;
+    scrollbar-width: none;
+  }
+  #photo-strip::-webkit-scrollbar { display: none; }
+  #photo-strip.visible { display: flex; }
+  #photo-strip .ps-thumb {
+    width: 88px; height: 66px;
+    object-fit: cover; border-radius: 8px;
+    cursor: pointer;
+    border: 2px solid transparent;
+    transition: border-color 0.2s, transform 0.2s;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.55);
+    background: rgba(255,255,255,0.05);
+  }
+  #photo-strip .ps-thumb:hover {
+    border-color: #f5af19;
+    transform: scale(1.08) translateX(-4px);
+  }
+
+  /* Lightbox */
+  #photo-lightbox {
+    display: none;
+    position: fixed; inset: 0; z-index: 500;
+    background: rgba(0,0,0,0.90); backdrop-filter: blur(18px);
+    align-items: center; justify-content: center;
+  }
+  #photo-lightbox.visible { display: flex; }
+  #photo-lightbox #lb-img {
+    max-width: min(88vw, 1080px); max-height: 84vh;
+    border-radius: 12px; object-fit: contain;
+    box-shadow: 0 40px 100px rgba(0,0,0,0.7);
+  }
+  #lb-close-btn {
+    position: absolute; top: 20px; right: 24px;
+    width: 46px; height: 46px; border-radius: 50%;
+    background: rgba(255,255,255,0.12); backdrop-filter: blur(6px);
+    border: 1px solid rgba(255,255,255,0.22);
+    color: #fff; font-size: 1.5rem; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: background 0.2s; z-index: 501;
+    line-height: 1;
+  }
+  #lb-close-btn:hover { background: rgba(255,255,255,0.26); }
+
   /* Compass */
   #compass {
     position: fixed; bottom: 28px; right: 28px;
@@ -320,6 +371,12 @@
   <p id="loc-panel-desc"></p>
 </div>
 <div id="loc-hint">Trascina per guardarti intorno</div>
+
+<div id="photo-strip"></div>
+<div id="photo-lightbox">
+  <button id="lb-close-btn" aria-label="Chiudi">&#x2715;</button>
+  <img id="lb-img" src="" alt="">
+</div>
 <div id="location-view">
   <div class="loc-view-bg" id="loc-bg"></div>
   <div class="loc-view-content">
@@ -354,6 +411,7 @@ const locations = [
     lat: 29.935, lon: 52.891, color: '#f5a623', icon: '🏛️',
     gradient: 'linear-gradient(135deg, #ff9a56, #c2185b)',
     image: 'https://upload.wikimedia.org/wikipedia/commons/thumb/7/79/Persepolis_2012.jpg/500px-Persepolis_2012.jpg',
+    photos: ['Persepolis_2012.jpg','Apadana.jpg','Gate_of_all_nations_persepolis.jpg','Persepolis_Iran.jpg'],
   },
   {
     id: 'nasir-al-mulk', name: 'Moschea Nasir al-Mulk', nameFa: 'مسجد نصیرالملک',
@@ -361,6 +419,7 @@ const locations = [
     lat: 29.609, lon: 52.548, color: '#e91e63', icon: '🕌',
     gradient: 'linear-gradient(135deg, #e91e63, #9c27b0)',
     image: 'https://upload.wikimedia.org/wikipedia/commons/thumb/3/35/Nasir-ol-Molk_Mosque_(inside).jpg/500px-Nasir-ol-Molk_Mosque_(inside).jpg',
+    photos: ['Nasir-ol-Molk_Mosque_(inside).jpg','Nasir_ol_Molk_Mosque_in_the_morning,_Shiraz.JPG','Nasir_al-Mulk_Mosque_ceiling.jpg','Nasir_ol_Molk_Mosque_courtyard.jpg'],
   },
   {
     id: 'naqsh-e-jahan', name: 'Piazza Naqsh-e Jahan', nameFa: 'میدان نقش جهان',
@@ -368,6 +427,7 @@ const locations = [
     lat: 32.657, lon: 51.677, color: '#2196f3', icon: '🏰',
     gradient: 'linear-gradient(135deg, #0288d1, #01579b)',
     image: 'https://upload.wikimedia.org/wikipedia/commons/thumb/f/f6/Naghshe_Jahan_Square_Isfahan_modified2.jpg/500px-Naghshe_Jahan_Square_Isfahan_modified2.jpg',
+    photos: ['Naghshe_Jahan_Square_Isfahan_modified2.jpg','Imam_mosque_of_Isfahan.jpg','Sheikh_Lotfollah_mosque_ceiling.jpg','Ali_Qapu,_Isfahan.jpg'],
   },
   {
     id: 'golestan', name: 'Palazzo del Golestan', nameFa: 'کاخ گلستان',
@@ -375,6 +435,7 @@ const locations = [
     lat: 35.684, lon: 51.414, color: '#4caf50', icon: '👑',
     gradient: 'linear-gradient(135deg, #388e3c, #1b5e20)',
     image: 'https://upload.wikimedia.org/wikipedia/commons/thumb/2/2f/Golestan-palace.jpg/500px-Golestan-palace.jpg',
+    photos: ['Golestan-palace.jpg','Mirror_hall_of_Golestan_Palace.jpg','Golestan_Palace_Tehran.jpg','Throne_of_the_Sun,_Golestan_Palace.jpg'],
   },
   {
     id: 'badab-e-surt', name: 'Badab-e Surt', nameFa: 'باداب سورت',
@@ -382,6 +443,7 @@ const locations = [
     lat: 36.392, lon: 53.935, color: '#ff5722', icon: '🌋',
     gradient: 'linear-gradient(135deg, #ff5722, #e64a19)',
     image: 'https://upload.wikimedia.org/wikipedia/commons/thumb/3/38/Badab-e_Surt.jpg/500px-Badab-e_Surt.jpg',
+    photos: ['Badab-e_Surt.jpg','Badab_surt_iran.jpg','Badab-e-Surt_Iran.jpg','Terraces_Badab_Surt.jpg'],
   },
   {
     id: 'yazd', name: 'Città Vecchia di Yazd', nameFa: 'بافت تاریخی یزد',
@@ -389,6 +451,7 @@ const locations = [
     lat: 31.897, lon: 54.357, color: '#ff9800', icon: '🏺',
     gradient: 'linear-gradient(135deg, #ff9800, #e65100)',
     image: 'https://upload.wikimedia.org/wikipedia/commons/thumb/8/83/Masjed-e_Jomeh,_Yazd.jpg/500px-Masjed-e_Jomeh,_Yazd.jpg',
+    photos: ['Masjed-e_Jomeh,_Yazd.jpg','Yazd_Badgirs.jpg','Old_city_Yazd_Iran.jpg','Yazd_Iran_Windtowers.jpg'],
   },
   {
     id: 'dasht-e-lut', name: 'Deserto Dasht-e Lut', nameFa: 'دشت لوت',
@@ -396,6 +459,7 @@ const locations = [
     lat: 30.55, lon: 58.75, color: '#bf360c', icon: '🏜️',
     gradient: 'linear-gradient(135deg, #bf360c, #4e342e)',
     image: 'https://upload.wikimedia.org/wikipedia/commons/thumb/6/62/Lut_Desert_Yardangs_by_Hadi_Karimi.jpg/500px-Lut_Desert_Yardangs_by_Hadi_Karimi.jpg',
+    photos: ['Lut_Desert_Yardangs_by_Hadi_Karimi.jpg','Kaluts_Dasht-e_Lut.jpg','Dasht-e_Lut_Desert.jpg','Lut_Desert_Iran.jpg'],
   },
   {
     id: 'tabriz', name: 'Bazar di Tabriz', nameFa: 'بازار تبریز',
@@ -403,6 +467,7 @@ const locations = [
     lat: 38.079, lon: 46.289, color: '#9c27b0', icon: '🧶',
     gradient: 'linear-gradient(135deg, #9c27b0, #4a148c)',
     image: 'https://upload.wikimedia.org/wikipedia/commons/thumb/c/c4/Tabriz_Bazar.jpg/500px-Tabriz_Bazar.jpg',
+    photos: ['Tabriz_Bazar.jpg','Grand_Bazaar_Tabriz.jpg','Tabriz_Bazaar_interior.jpg','Tabriz_bazaar_carpet.jpg'],
   }
 ];
 
@@ -1127,6 +1192,23 @@ function startImmersiveLocation(loc, builder) {
   document.getElementById('loc-info-panel').classList.add('visible');
   document.getElementById('back-btn').classList.add('visible');
 
+  // Photo strip
+  const strip = document.getElementById('photo-strip');
+  strip.innerHTML = '';
+  if (loc.photos && loc.photos.length) {
+    loc.photos.forEach(fname => {
+      const base = `https://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(fname)}`;
+      const img = document.createElement('img');
+      img.className = 'ps-thumb';
+      img.src = base + '?width=120';
+      img.alt = loc.name;
+      img.onerror = () => { img.style.display = 'none'; };
+      img.onclick = () => openLightbox(base + '?width=1200');
+      strip.appendChild(img);
+    });
+    strip.classList.add('visible');
+  }
+
   // Hint
   const hint = document.getElementById('loc-hint');
   hint.classList.add('visible');
@@ -1184,6 +1266,12 @@ window.exitLocation=function(){
     document.getElementById('loc-info-panel').classList.remove('visible');
     document.getElementById('back-btn').classList.remove('visible');
     document.getElementById('loc-hint').classList.remove('visible');
+    // Photo strip & lightbox
+    const strip = document.getElementById('photo-strip');
+    strip.classList.remove('visible');
+    strip.innerHTML = '';
+    document.getElementById('photo-lightbox').classList.remove('visible');
+    document.getElementById('lb-img').src = '';
     document.getElementById('hub-title').style.opacity='1';
     document.getElementById('labels-container').style.opacity='1';
     document.getElementById('compass').style.opacity='1';
@@ -1191,6 +1279,24 @@ window.exitLocation=function(){
     setTimeout(()=>overlay.classList.remove('active'),100);
   },600);
 };
+
+// Photo lightbox helpers
+window.openLightbox = function(src) {
+  document.getElementById('lb-img').src = src;
+  document.getElementById('photo-lightbox').classList.add('visible');
+};
+window.closeLightbox = function(e) {
+  if (e && e.target === document.getElementById('lb-img')) return;
+  document.getElementById('photo-lightbox').classList.remove('visible');
+};
+(function(){
+  const lb = document.getElementById('photo-lightbox');
+  lb.addEventListener('click', window.closeLightbox);
+  document.getElementById('lb-close-btn').addEventListener('click', window.closeLightbox);
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') window.closeLightbox();
+  });
+})();
 
 // ============================================================
 //  LOCATION BUILDERS REGISTRY
