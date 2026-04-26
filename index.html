@@ -3804,9 +3804,9 @@ const TourController = {
   _playNext() {
     if (!this._voiceOn || !this._audioQueue || this._audioIdx >= this._audioQueue.length) return;
     const chunk = this._audioQueue[this._audioIdx];
-    const url = 'https://translate.google.com/translate_tts?ie=UTF-8' +
-      '&q=' + encodeURIComponent(chunk) +
-      '&tl=it&client=tw-ob&ttsspeed=0.88';
+    // StreamElements TTS — voce neurale Microsoft it-IT-DiegoNeural (maschile)
+    const url = 'https://api.streamelements.com/kappa/v2/speech?voice=it-IT-DiegoNeural' +
+      '&text=' + encodeURIComponent(chunk);
     const audio = new Audio(url);
     audio.volume = 1.0;
     this._currentAudio = audio;
