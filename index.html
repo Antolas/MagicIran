@@ -2013,188 +2013,373 @@ locationBuilders['persepolis'] = function(scene, camera, controls) {
 //  NAQSH-E JAHAN — Isfahan grand square
 // ============================================================
 locationBuilders['naqsh-e-jahan'] = function(scene, camera, controls) {
-  camera.position.set(0, 4, 40);
-  controls.target.set(0, 5, 0);
-  controls.minDistance=1;controls.maxDistance=60;
-  controls.maxPolarAngle=Math.PI*0.80;controls.minPolarAngle=Math.PI*0.04;
-  controls.autoRotateSpeed=0.09;
-  if(locRenderer){locRenderer.toneMapping=THREE.ACESFilmicToneMapping;locRenderer.toneMappingExposure=1.1;}
+  camera.position.set(0, 5, 42);
+  controls.target.set(0, 6, 0);
+  controls.minDistance=1;controls.maxDistance=65;
+  controls.maxPolarAngle=Math.PI*0.78;controls.minPolarAngle=Math.PI*0.04;
+  controls.autoRotateSpeed=0.08;
+  if(locRenderer){locRenderer.toneMapping=THREE.ACESFilmicToneMapping;locRenderer.toneMappingExposure=1.15;}
 
   const uni={uTime:{value:0}};
-  // Sky: Persian blue afternoon
-  const skyMat=new THREE.ShaderMaterial({side:THREE.BackSide,uniforms:uni,
-    vertexShader:`varying vec3 vP;void main(){vP=position;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`,
-    fragmentShader:`varying vec3 vP;uniform float uTime;
-      void main(){float h=normalize(vP).y;
-        vec3 c=mix(vec3(0.55,0.78,0.95),vec3(0.15,0.32,0.70),clamp(h,0.0,1.0));
-        c=mix(c,vec3(0.80,0.90,1.0),smoothstep(0.15,0.0,h)*0.4);
-        gl_FragColor=vec4(c,1.0);}`});
-  scene.add(new THREE.Mesh(new THREE.SphereGeometry(120,32,16),skyMat));
 
-  scene.add(new THREE.AmbientLight(0x88aacc,0.8));
-  const sun=new THREE.DirectionalLight(0xfff5cc,2.2);
-  sun.position.set(4,8,5); scene.add(sun);
-  scene.add(new THREE.HemisphereLight(0xaaccff,0x443322,0.4));
-
-  // Vast stone square floor with tile pattern
-  const flMat=new THREE.ShaderMaterial({side:THREE.FrontSide,uniforms:uni,
-    vertexShader:`varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`,
-    fragmentShader:`varying vec2 vUv;uniform float uTime;
-      void main(){
-        vec2 su=vUv*60.0;vec2 sf=fract(su)-0.5;
-        float joint=max(smoothstep(0.03,0.008,abs(sf.x)),smoothstep(0.03,0.008,abs(sf.y)));
-        vec3 stone=vec3(0.78,0.72,0.60);
-        stone=mix(stone,stone*0.72,joint*0.6);
-        float dist=length(vUv-0.5)*2.0;
-        stone*=0.7+0.3*(1.0-smoothstep(0.5,1.0,dist));
-        gl_FragColor=vec4(stone,1.0);}`});
-  const fl=new THREE.Mesh(new THREE.PlaneGeometry(120,120,1,1),flMat);
-  fl.rotation.x=-Math.PI/2; scene.add(fl);
-
-  // Central reflecting pool
-  const poolMat=new THREE.ShaderMaterial({side:THREE.FrontSide,uniforms:uni,transparent:true,
-    vertexShader:`varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`,
-    fragmentShader:`varying vec2 vUv;uniform float uTime;
-      void main(){
-        vec2 uv=vUv-0.5;float r=length(uv);
-        vec3 sky=vec3(0.40,0.62,0.82);
-        float wave=sin(r*20.0-uTime*2.0)*0.04+sin(uv.x*15.0-uTime*1.5)*0.03;
-        vec3 c=sky+wave*vec3(0.15,0.20,0.25);
-        float border=smoothstep(0.49,0.42,r);
-        float foam=smoothstep(0.47,0.44,r)*0.3;
-        c=mix(c,vec3(0.82,0.80,0.70),foam);
-        gl_FragColor=vec4(c,border*0.88);}`});
-  const pool=new THREE.Mesh(new THREE.PlaneGeometry(10,46,1,1),poolMat);
-  pool.rotation.x=-Math.PI/2;pool.position.y=0.02; scene.add(pool);
-
-  // Fountain jets
-  for(let fi=-3;fi<=3;fi++){
-    const fJet=new THREE.Mesh(new THREE.CylinderGeometry(0.04,0.12,2.5,6),
-      new THREE.MeshBasicMaterial({color:0xaaddff,transparent:true,opacity:0.5}));
-    fJet.position.set(0,1.25,fi*6); scene.add(fJet);
+  // ── CANVAS TEXTURE GENERATORS ───────────────────────────────────────────
+  function mkTex(w,h,fn){
+    const c=document.createElement('canvas');c.width=w;c.height=h;
+    fn(c.getContext('2d'),w,h);
+    const t=new THREE.CanvasTexture(c);t.wrapS=t.wrapT=THREE.RepeatWrapping;
+    return t;
   }
 
-  // Portals / arcade: 3 sides with pointed arches
-  function buildArcade(xPos,rotY,nArches,aW,aH,depth){
-    for(let i=0;i<nArches;i++){
+  // 8-pointed star (hasht-par) — classic Persian zellige
+  function starTile(W=512,H=512){
+    return mkTex(W,H,(ctx)=>{
+      ctx.fillStyle='#0b2468';ctx.fillRect(0,0,W,H);
+      const N=2, tw=W/N;
+      for(let row=0;row<N;row++) for(let col=0;col<N;col++){
+        const cx=col*tw+tw/2, cy=row*tw+tw/2, R=tw*0.44, ri=R*0.40;
+        // outer star fill
+        ctx.beginPath();
+        for(let i=0;i<16;i++){
+          const a=i*Math.PI/8-(Math.PI/16);
+          const r2=i%2===0?R:ri;
+          i===0?ctx.moveTo(cx+Math.cos(a)*r2,cy+Math.sin(a)*r2)
+               :ctx.lineTo(cx+Math.cos(a)*r2,cy+Math.sin(a)*r2);
+        }
+        ctx.closePath();ctx.fillStyle='#1452c0';ctx.fill();
+        // gold outline
+        ctx.strokeStyle='#c8920a';ctx.lineWidth=3;ctx.stroke();
+        // center turquoise octagon
+        ctx.beginPath();
+        for(let i=0;i<8;i++){
+          const a=i*Math.PI/4;
+          i===0?ctx.moveTo(cx+Math.cos(a)*R*0.30,cy+Math.sin(a)*R*0.30)
+               :ctx.lineTo(cx+Math.cos(a)*R*0.30,cy+Math.sin(a)*R*0.30);
+        }
+        ctx.closePath();ctx.fillStyle='#06a8b8';ctx.fill();
+        ctx.strokeStyle='#e0b020';ctx.lineWidth=2;ctx.stroke();
+        // center dot
+        ctx.beginPath();ctx.arc(cx,cy,R*0.10,0,Math.PI*2);
+        ctx.fillStyle='#f0c828';ctx.fill();
+        // corner diamond fillers (where 4 stars meet)
+        [[0,0],[tw,0],[0,tw],[tw,tw]].forEach(([ox,oy])=>{
+          ctx.save();ctx.translate(col*tw+ox,row*tw+oy);ctx.rotate(Math.PI/4);
+          ctx.fillStyle='#0872a0';
+          ctx.fillRect(-R*0.14,-R*0.14,R*0.28,R*0.28);
+          ctx.strokeStyle='#d4a010';ctx.lineWidth=1.5;ctx.strokeRect(-R*0.14,-R*0.14,R*0.28,R*0.28);
+          ctx.restore();
+        });
+        // half-stars at edges (cross-shaped interstice)
+        [[cx,row*tw],[cx,(row+1)*tw],[col*tw,cy],[(col+1)*tw,cy]].forEach(([ex,ey])=>{
+          ctx.beginPath();ctx.arc(ex,ey,R*0.22,0,Math.PI*2);
+          ctx.fillStyle='#1060c8';ctx.fill();
+          ctx.strokeStyle='#b88008';ctx.lineWidth=1.5;ctx.stroke();
+        });
+      }
+      // grout overlay
+      ctx.strokeStyle='rgba(2,6,20,0.75)';ctx.lineWidth=2.5;
+      for(let i=0;i<=N;i++){
+        ctx.beginPath();ctx.moveTo(i*tw,0);ctx.lineTo(i*tw,H);ctx.stroke();
+        ctx.beginPath();ctx.moveTo(0,i*tw);ctx.lineTo(W,i*tw);ctx.stroke();
+      }
+    });
+  }
+
+  // Travertine stone paving — Isfahan courtyard
+  function stonePave(){
+    return mkTex(1024,1024,(ctx,W,H)=>{
+      ctx.fillStyle='#cbbf9e';ctx.fillRect(0,0,W,H);
+      const cols=6,rows=6,tw=W/cols,th=H/rows;
+      for(let rr=0;rr<rows;rr++) for(let cc=0;cc<cols;cc++){
+        const x=cc*tw,y=rr*th;
+        const seed=rr*17+cc*31;
+        const v=0.82+((Math.sin(seed*7.3)*0.5+0.5))*0.22;
+        const r2=Math.round(203*v),g2=Math.round(191*v),b2=Math.round(158*v);
+        ctx.fillStyle=`rgb(${r2},${g2},${b2})`;
+        ctx.fillRect(x+2,y+2,tw-4,th-4);
+        // veins
+        ctx.save();ctx.strokeStyle=`rgba(148,136,112,0.40)`;ctx.lineWidth=1.2;
+        for(let vi=0;vi<5;vi++){
+          const s2=seed*10+vi;
+          const sx=x+(Math.sin(s2*3.7)*0.5+0.5)*tw;
+          const sy=y+(Math.cos(s2*4.1)*0.5+0.5)*th;
+          ctx.beginPath();ctx.moveTo(sx,sy);
+          ctx.bezierCurveTo(
+            sx+(Math.sin(s2*2.9)-0.5)*tw*0.5,sy+(Math.cos(s2*3.3)-0.5)*th*0.5,
+            sx+(Math.sin(s2*5.1)-0.5)*tw*0.7,sy+(Math.cos(s2*4.7)-0.5)*th*0.7,
+            sx+(Math.sin(s2*1.7)-0.5)*tw,    sy+(Math.cos(s2*2.3)-0.5)*th);
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+      // grout lines
+      ctx.strokeStyle='rgba(88,76,58,0.55)';ctx.lineWidth=4;
+      for(let i=0;i<=cols;i++){ctx.beginPath();ctx.moveTo(i*tw,0);ctx.lineTo(i*tw,H);ctx.stroke();}
+      for(let i=0;i<=rows;i++){ctx.beginPath();ctx.moveTo(0,i*th);ctx.lineTo(W,i*th);ctx.stroke();}
+    });
+  }
+
+  // Dome mosaic — concentric arabesque medallion
+  function domeMosaic(){
+    return mkTex(1024,1024,(ctx,W,H)=>{
+      // mosaic tile grid with distance-based hue
+      const ts=16;
+      for(let rr=0;rr<H;rr+=ts) for(let cc=0;cc<W;cc+=ts){
+        const dx=cc-W/2,dy=rr-H/2;
+        const ang=Math.atan2(dy,dx);
+        const d=Math.sqrt(dx*dx+dy*dy)/(W/2);
+        const hue=192+Math.sin(ang*8)*14+d*30;
+        const sat=62+d*20;
+        const lum=22+d*18;
+        ctx.fillStyle=`hsl(${hue},${sat}%,${lum}%)`;
+        ctx.fillRect(cc+0.6,rr+0.6,ts-1.2,ts-1.2);
+      }
+      // gold arabesque rings (rotated octagons)
+      ctx.strokeStyle='rgba(210,164,8,0.80)';
+      for(let i=1;i<=12;i++){
+        const r2=i/12*W*0.47;
+        ctx.lineWidth=i%3===0?3:1.5;
+        ctx.save();ctx.translate(W/2,H/2);ctx.rotate(i*Math.PI/12);
+        ctx.beginPath();
+        for(let j=0;j<8;j++){
+          const a=j*Math.PI/4;
+          j===0?ctx.moveTo(Math.cos(a)*r2,Math.sin(a)*r2):ctx.lineTo(Math.cos(a)*r2,Math.sin(a)*r2);
+        }
+        ctx.closePath();ctx.stroke();
+        ctx.restore();
+      }
+      // radial spokes
+      ctx.strokeStyle='rgba(185,142,5,0.35)';ctx.lineWidth=1;
+      for(let a=0;a<Math.PI*2;a+=Math.PI/8){
+        ctx.save();ctx.translate(W/2,H/2);
+        ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(Math.cos(a)*W*0.5,Math.sin(a)*W*0.5);
+        ctx.stroke();ctx.restore();
+      }
+      // central 16-point star medallion
+      ctx.save();ctx.translate(W/2,H/2);
+      ctx.beginPath();
+      for(let i=0;i<16;i++){
+        const a=i*Math.PI/8;
+        const r2=i%2===0?W*0.11:W*0.058;
+        i===0?ctx.moveTo(Math.cos(a)*r2,Math.sin(a)*r2):ctx.lineTo(Math.cos(a)*r2,Math.sin(a)*r2);
+      }
+      ctx.closePath();ctx.fillStyle='#c08808';ctx.fill();
+      ctx.strokeStyle='#f0d040';ctx.lineWidth=2;ctx.stroke();
+      ctx.restore();
+      // grout grid
+      ctx.strokeStyle='rgba(0,4,16,0.28)';ctx.lineWidth=0.8;
+      for(let rr=0;rr<H;rr+=ts){ctx.beginPath();ctx.moveTo(0,rr);ctx.lineTo(W,rr);ctx.stroke();}
+      for(let cc=0;cc<W;cc+=ts){ctx.beginPath();ctx.moveTo(cc,0);ctx.lineTo(cc,H);ctx.stroke();}
+    });
+  }
+
+  // Arcade back-wall arabesque (warm plaster + blue/gold pattern)
+  function arcadeWall(){
+    return mkTex(512,512,(ctx,W,H)=>{
+      ctx.fillStyle='#ddd0a6';ctx.fillRect(0,0,W,H);
+      const N=4,tw=W/N;
+      // alternating terracotta/cream diamonds
+      for(let r=0;r<N;r++) for(let c=0;c<N;c++){
+        const cx=(c+0.5)*tw,cy=(r+0.5)*tw;
+        ctx.save();ctx.translate(cx,cy);ctx.rotate(Math.PI/4);
+        ctx.fillStyle=(r+c)%2===0?'#c89c58':'#e8d48a';
+        ctx.fillRect(-tw*0.38,-tw*0.38,tw*0.76,tw*0.76);
+        ctx.restore();
+      }
+      // blue arabesque strokes
+      ctx.strokeStyle='#183696';ctx.lineWidth=3;
+      for(let r=0;r<N+1;r++) for(let c=0;c<N+1;c++){
+        ctx.beginPath();ctx.arc(c*tw,r*tw,tw*0.20,0,Math.PI*2);ctx.stroke();
+      }
+      // 4-petal flowers at cell centers
+      for(let r=0;r<N;r++) for(let c=0;c<N;c++){
+        const cx=(c+0.5)*tw,cy=(r+0.5)*tw;
+        ctx.strokeStyle='#1038a0';ctx.lineWidth=2.5;
+        for(let p=0;p<4;p++){
+          ctx.save();ctx.translate(cx,cy);ctx.rotate(p*Math.PI/2);
+          ctx.beginPath();ctx.ellipse(0,-tw*0.20,tw*0.09,tw*0.20,0,0,Math.PI*2);
+          ctx.stroke();ctx.restore();
+        }
+        ctx.beginPath();ctx.arc(cx,cy,tw*0.07,0,Math.PI*2);
+        ctx.fillStyle='#d4980c';ctx.fill();
+      }
+      // thin grid lines
+      ctx.strokeStyle='rgba(18,50,130,0.40)';ctx.lineWidth=1.5;
+      for(let i=0;i<=N;i++){
+        ctx.beginPath();ctx.moveTo(i*tw,0);ctx.lineTo(i*tw,H);ctx.stroke();
+        ctx.beginPath();ctx.moveTo(0,i*tw);ctx.lineTo(W,i*tw);ctx.stroke();
+      }
+    });
+  }
+
+  // ── SCENE BUILD ──────────────────────────────────────────────────────────
+  // Pre-create shared textures (clone for different repeat values)
+  const _star=starTile(), _pave=stonePave(), _dome=domeMosaic(), _wall=arcadeWall();
+  function useStar(ru,rv){const t=_star.clone();t.repeat.set(ru,rv);return t;}
+  function useWall(ru,rv){const t=_wall.clone();t.repeat.set(ru,rv);return t;}
+
+  // Sky — Persian blue afternoon, slight haze at horizon
+  scene.add(new THREE.Mesh(new THREE.SphereGeometry(120,32,16),
+    new THREE.ShaderMaterial({side:THREE.BackSide,
+      vertexShader:`varying vec3 vP;void main(){vP=position;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`,
+      fragmentShader:`varying vec3 vP;void main(){float h=normalize(vP).y;
+        vec3 c=mix(vec3(0.65,0.86,0.98),vec3(0.14,0.34,0.80),clamp(h*1.3,0.0,1.0));
+        c=mix(c,vec3(0.93,0.96,1.0),smoothstep(0.06,0.0,h)*0.55);
+        gl_FragColor=vec4(c,1.0);}`})));
+
+  scene.add(new THREE.AmbientLight(0x90aac8,0.95));
+  const sun=new THREE.DirectionalLight(0xfff8d0,2.6);sun.position.set(6,10,4);scene.add(sun);
+  scene.add(new THREE.HemisphereLight(0xaaccff,0x554433,0.45));
+
+  // Stone floor
+  _pave.repeat.set(9,9);
+  const fl=new THREE.Mesh(new THREE.PlaneGeometry(132,132),
+    new THREE.MeshStandardMaterial({map:_pave,roughness:0.80,metalness:0.01}));
+  fl.rotation.x=-Math.PI/2;scene.add(fl);
+
+  // Reflecting pool
+  const poolMat=new THREE.ShaderMaterial({side:THREE.FrontSide,uniforms:uni,transparent:true,
+    vertexShader:`varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`,
+    fragmentShader:`varying vec2 vUv;uniform float uTime;void main(){
+      vec2 uv=vUv-0.5;float r=length(uv);
+      float w=sin(r*22.0-uTime*2.2)*0.04+sin(uv.x*16.0-uTime*1.6)*0.03;
+      vec3 c=vec3(0.36,0.58,0.82)+w*vec3(0.12,0.18,0.24);
+      c=mix(c,vec3(0.93,0.91,0.80),smoothstep(0.47,0.44,r)*0.28);
+      gl_FragColor=vec4(c,smoothstep(0.50,0.42,r)*0.92);}`});
+  const pool=new THREE.Mesh(new THREE.PlaneGeometry(10,48),poolMat);
+  pool.rotation.x=-Math.PI/2;pool.position.y=0.025;scene.add(pool);
+
+  // Fountain jets — tapered cylinders
+  for(let fi=-3;fi<=3;fi++){
+    const j=new THREE.Mesh(new THREE.CylinderGeometry(0.03,0.10,2.8,6),
+      new THREE.MeshBasicMaterial({color:0xb8e0ff,transparent:true,opacity:0.42}));
+    j.position.set(0,1.4,fi*6.5);scene.add(j);
+  }
+
+  // East/West arcades with canvas tile textures
+  function buildArcade(xPos,rotY){
+    const nA=11,aW=5,aH=9.5;
+    const wMat=new THREE.MeshStandardMaterial({map:useWall(5,3),roughness:0.72,metalness:0.0});
+    const fMat=new THREE.MeshStandardMaterial({map:useStar(3,2),roughness:0.52,metalness:0.02});
+    for(let i=0;i<nA;i++){
       const g=new THREE.Group();
-      const zPos=(i-(nArches-1)/2)*(aW+0.3);
-      // Arch back wall section
-      const wallMat2=new THREE.ShaderMaterial({side:THREE.DoubleSide,
-        vertexShader:`varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`,
-        fragmentShader:`varying vec2 vUv;
-          void main(){
-            vec2 tv=vUv*vec2(8.0,5.0);vec2 tf=fract(tv)-0.5;
-            float tg=max(smoothstep(0.04,0.008,abs(tf.x)),smoothstep(0.04,0.008,abs(tf.y)));
-            float th=fract(dot(floor(tv),vec2(0.37,0.73))*43.7);
-            vec3 a=th<0.33?vec3(0.18,0.38,0.72):th<0.66?vec3(0.58,0.72,0.22):vec3(0.78,0.60,0.08);
-            float td=abs(tf.x)+abs(tf.y);a=mix(a*0.5,a,smoothstep(0.40,0.28,td));
-            a=mix(a,vec3(0.06,0.05,0.08),tg*0.6);
-            gl_FragColor=vec4(a*0.70,1.0);}` });
-      const wall=new THREE.Mesh(new THREE.PlaneGeometry(aW,aH+1),wallMat2);
-      g.add(wall);
-      // Arch cutout frame
+      const zPos=(i-(nA-1)/2)*(aW+0.28);
+      g.add(new THREE.Mesh(new THREE.PlaneGeometry(aW,aH+1),wMat));
       const aS=new THREE.Shape();
-      aS.moveTo(-aW/2,0);aS.lineTo(-aW/2,aH*0.5);
-      aS.quadraticCurveTo(-aW*0.35,aH*0.98,0,aH*0.52);
-      aS.quadraticCurveTo(aW*0.35,aH*0.98,aW/2,aH*0.5);
+      aS.moveTo(-aW/2,0);aS.lineTo(-aW/2,aH*0.48);
+      aS.quadraticCurveTo(-aW*0.34,aH*1.00,0,aH*0.52);
+      aS.quadraticCurveTo(aW*0.34,aH*1.00,aW/2,aH*0.48);
       aS.lineTo(aW/2,0);aS.closePath();
-      const hole=new THREE.Shape();
-      hole.moveTo(-aW*0.38,0);hole.lineTo(-aW*0.38,aH*0.44);
-      hole.quadraticCurveTo(-aW*0.26,aH*0.88,0,aH*0.48);
-      hole.quadraticCurveTo(aW*0.26,aH*0.88,aW*0.38,aH*0.44);
-      hole.lineTo(aW*0.38,0);hole.closePath();
-      aS.holes=[hole];
-      const frame=new THREE.Mesh(new THREE.ShapeGeometry(aS,24),
-        new THREE.MeshStandardMaterial({color:0x2248a8,roughness:0.6}));
-      frame.position.z=0.02; g.add(frame);
-      g.position.set(xPos,0.0,zPos);
-      if(rotY)g.rotation.y=rotY;
+      const hS=new THREE.Shape();
+      hS.moveTo(-aW*0.37,0);hS.lineTo(-aW*0.37,aH*0.43);
+      hS.quadraticCurveTo(-aW*0.25,aH*0.90,0,aH*0.47);
+      hS.quadraticCurveTo(aW*0.25,aH*0.90,aW*0.37,aH*0.43);
+      hS.lineTo(aW*0.37,0);hS.closePath();
+      aS.holes=[hS];
+      const fr=new THREE.Mesh(new THREE.ShapeGeometry(aS,28),fMat);
+      fr.position.z=0.022;g.add(fr);
+      g.position.set(xPos,0,zPos);g.rotation.y=rotY;
       scene.add(g);
     }
   }
-  buildArcade(-52,Math.PI/2,11,5,9,1);   // West arcade
-  buildArcade( 52,-Math.PI/2,11,5,9,1);  // East arcade
+  buildArcade(-53, Math.PI/2);
+  buildArcade( 53,-Math.PI/2);
 
-  // Imam Mosque (south): blue tiled iwan + dome
+  // ── Imam Mosque (south, Masjed-e Shah) ───────────────────────────────────
   const iwan=new THREE.Group();
-  // Main iwan facade
-  const iwMat=new THREE.ShaderMaterial({side:THREE.DoubleSide,
-    vertexShader:`varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`,
-    fragmentShader:`varying vec2 vUv;
-      void main(){
-        vec2 tv=vUv*vec2(14.0,9.0);vec2 tf=fract(tv)-0.5;
-        float tg=max(smoothstep(0.035,0.006,abs(tf.x)),smoothstep(0.035,0.006,abs(tf.y)));
-        float th=fract(dot(floor(tv),vec2(0.37,0.73))*43.7);
-        vec3 a=th<0.30?vec3(0.12,0.32,0.72):th<0.58?vec3(0.58,0.78,0.22):
-               th<0.78?vec3(0.08,0.55,0.60):vec3(0.82,0.72,0.10);
-        float td=abs(tf.x)+abs(tf.y);a=mix(a*0.45,a,smoothstep(0.40,0.28,td));
-        a=mix(a,vec3(0.04,0.03,0.06),tg*0.6);
-        gl_FragColor=vec4(a*0.85,1.0);}` });
-  const iwF=new THREE.Mesh(new THREE.PlaneGeometry(28,20),iwMat);
-  iwF.position.set(0,10.0,0); iwan.add(iwF);
-  // Dome
-  const doneMat=new THREE.ShaderMaterial({side:THREE.DoubleSide,
-    vertexShader:`varying vec2 vUv;varying vec3 vN;void main(){vUv=uv;vN=normalMatrix*normal;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`,
-    fragmentShader:`varying vec2 vUv;varying vec3 vN;
-      void main(){
-        float lng=atan(vN.x,vN.z),lat=asin(vN.y);
-        float geo=sin(lng*16.0)*sin(lat*12.0)*0.5+0.5;
-        vec3 blue=vec3(0.10,0.26,0.72);vec3 turq=vec3(0.08,0.54,0.60);
-        vec3 gold2=vec3(0.82,0.68,0.10);
-        vec3 c=mix(blue,turq,geo);
-        float arabesque=sin(lng*32.0)*sin(lat*24.0)*0.5+0.5;
-        c=mix(c,gold2,arabesque*0.28);
-        float lt=dot(normalize(vN),normalize(vec3(0.4,1.0,0.3)))*0.5+0.5;
-        c*=0.55+lt*0.55;gl_FragColor=vec4(c,1.0);}` });
-  const dome=new THREE.Mesh(new THREE.SphereGeometry(10,32,16,0,Math.PI*2,0,Math.PI*0.6),doneMat);
-  dome.position.set(0,22,-8); iwan.add(dome);
-  // Drum
-  const drum2=new THREE.Mesh(new THREE.CylinderGeometry(10,10,5,24),
-    new THREE.MeshStandardMaterial({color:0x1840a0,roughness:0.5}));
-  drum2.position.set(0,18,-8); iwan.add(drum2);
-  // Two minarets
-  [-13,13].forEach(x=>{
-    const min=new THREE.Group();
-    const minShaft=new THREE.Mesh(new THREE.CylinderGeometry(1.1,1.3,28,12),
-      new THREE.MeshStandardMaterial({color:0x1840a8,roughness:0.6}));
-    minShaft.position.y=14; min.add(minShaft);
-    const minCap=new THREE.Mesh(new THREE.ConeGeometry(1.4,4,12),
-      new THREE.MeshStandardMaterial({color:0x0a2870,roughness:0.5}));
-    minCap.position.y=30; min.add(minCap);
-    min.position.set(x,0,-2);
-    iwan.add(min);
+
+  // Iwan facade — star-tile
+  const iwT=useStar(7,4.5);
+  const iwF=new THREE.Mesh(new THREE.PlaneGeometry(32,24),
+    new THREE.MeshStandardMaterial({map:iwT,roughness:0.50,metalness:0.03}));
+  iwF.position.set(0,12,0);iwan.add(iwF);
+
+  // Iwan portal opening (pointed arch, star-tile surround)
+  const iAS=new THREE.Shape();
+  iAS.moveTo(-11,0);iAS.lineTo(-11,9);
+  iAS.quadraticCurveTo(-7,18,0,9.5);
+  iAS.quadraticCurveTo(7,18,11,9);
+  iAS.lineTo(11,0);iAS.closePath();
+  const iAH=new THREE.Shape();
+  iAH.moveTo(-8,0);iAH.lineTo(-8,8);
+  iAH.quadraticCurveTo(-5,15,0,8.5);
+  iAH.quadraticCurveTo(5,15,8,8);
+  iAH.lineTo(8,0);iAH.closePath();
+  iAS.holes=[iAH];
+  const iAF=new THREE.Mesh(new THREE.ShapeGeometry(iAS,36),
+    new THREE.MeshStandardMaterial({map:useStar(4,2.5),roughness:0.45,metalness:0.04}));
+  iAF.position.set(0,0,0.06);iwan.add(iAF);
+
+  // Dome — canvas mosaic
+  const dome=new THREE.Mesh(new THREE.SphereGeometry(10.5,48,24,0,Math.PI*2,0,Math.PI*0.58),
+    new THREE.MeshStandardMaterial({map:_dome,roughness:0.35,metalness:0.06,envMapIntensity:0.4}));
+  dome.position.set(0,23,-9);iwan.add(dome);
+
+  // Drum beneath dome
+  const drumT=useStar(10,2.5);
+  const drum=new THREE.Mesh(new THREE.CylinderGeometry(10.5,10.5,5.5,32),
+    new THREE.MeshStandardMaterial({map:drumT,roughness:0.48,metalness:0.03}));
+  drum.position.set(0,18.5,-9);iwan.add(drum);
+
+  // Minarets — fluted, star-tile
+  [-14,14].forEach(x=>{
+    const mn=new THREE.Group();
+    const mT=useStar(3,12);
+    const sh=new THREE.Mesh(new THREE.CylinderGeometry(1.05,1.30,30,20),
+      new THREE.MeshStandardMaterial({map:mT,roughness:0.58,metalness:0.02}));
+    sh.position.y=15;mn.add(sh);
+    // balcony ring
+    const bal=new THREE.Mesh(new THREE.TorusGeometry(1.55,0.22,8,20),
+      new THREE.MeshStandardMaterial({color:0x0a1e6a,roughness:0.5}));
+    bal.position.y=28;bal.rotation.x=Math.PI/2;mn.add(bal);
+    const cp=new THREE.Mesh(new THREE.ConeGeometry(1.38,4.5,16),
+      new THREE.MeshStandardMaterial({color:0x060e3a,roughness:0.45}));
+    cp.position.y=32.5;mn.add(cp);
+    mn.position.set(x,0,-2);iwan.add(mn);
   });
-  iwan.position.set(0,0,-52); iwan.rotation.y=Math.PI;
+
+  iwan.position.set(0,0,-54);iwan.rotation.y=Math.PI;
   scene.add(iwan);
 
-  // Ali Qapu palace (west side, simplified)
+  // ── Ali Qapu Palace (west) ────────────────────────────────────────────────
   const aqG=new THREE.Group();
-  const aqBody=new THREE.Mesh(new THREE.BoxGeometry(18,22,8),
-    new THREE.MeshStandardMaterial({color:0xc8a870,roughness:0.8}));
-  aqBody.position.y=11; aqG.add(aqBody);
-  // Loggia columns
+  const aqT=useWall(3,2);
+  // main block
+  const aqBody=new THREE.Mesh(new THREE.BoxGeometry(18,24,9),
+    new THREE.MeshStandardMaterial({map:aqT,roughness:0.72,metalness:0.0}));
+  aqBody.position.y=12;aqG.add(aqBody);
+  // loggia floor overhang
+  const loggia=new THREE.Mesh(new THREE.BoxGeometry(22,0.6,10),
+    new THREE.MeshStandardMaterial({color:0xb89a60,roughness:0.75}));
+  loggia.position.y=18.4;aqG.add(loggia);
+  // columns
   for(let ci=-3;ci<=3;ci++){
-    const lc=new THREE.Mesh(new THREE.CylinderGeometry(0.35,0.38,6,8),
-      new THREE.MeshStandardMaterial({color:0xb89060,roughness:0.7}));
-    lc.position.set(ci*2.5,19,-3.8); aqG.add(lc);
+    const col=new THREE.Mesh(new THREE.CylinderGeometry(0.38,0.42,6.5,12),
+      new THREE.MeshStandardMaterial({color:0xc8a868,roughness:0.65}));
+    col.position.set(ci*2.8,15.5,-4.2);aqG.add(col);
+    // capital
+    const cap=new THREE.Mesh(new THREE.BoxGeometry(0.90,0.55,0.90),
+      new THREE.MeshStandardMaterial({color:0xb89050,roughness:0.6}));
+    cap.position.set(ci*2.8,18.7,-4.2);aqG.add(cap);
   }
-  aqG.position.set(-54,0,-5);aqG.rotation.y=Math.PI/2;
+  aqG.position.set(-55,0,-4);aqG.rotation.y=Math.PI/2;
   scene.add(aqG);
 
-  // Scatter some decorative planters / trees
-  for(let ti=0;ti<8;ti++){
+  // ── Trees around square ───────────────────────────────────────────────────
+  const positions=[[28,8],[28,-8],[-28,8],[-28,-8],[0,28],[0,-28],[20,22],[-20,22],
+                   [20,-22],[-20,-22],[35,0],[-35,0]];
+  positions.forEach(([px,pz])=>{
     const tg=new THREE.Group();
-    const trunk=new THREE.Mesh(new THREE.CylinderGeometry(0.2,0.25,3,6),
+    const trunk=new THREE.Mesh(new THREE.CylinderGeometry(0.18,0.24,3.5,7),
       new THREE.MeshStandardMaterial({color:0x4a3018,roughness:0.95}));
-    trunk.position.y=1.5; tg.add(trunk);
-    const crown=new THREE.Mesh(new THREE.SphereGeometry(2.0,8,6),
-      new THREE.MeshStandardMaterial({color:0x286618,roughness:0.9}));
-    crown.position.y=4.0; tg.add(crown);
-    const a=ti/8*Math.PI*2;
-    tg.position.set(Math.cos(a)*30,0,Math.sin(a)*22);
-    scene.add(tg);
-  }
+    trunk.position.y=1.75;tg.add(trunk);
+    // foliage — layered spheres for fuller look
+    [[0,4.5,0,2.2],[0.4,5.8,0.3,1.4],[-0.3,5.5,-0.4,1.6]].forEach(([ox,oy,oz,sr])=>{
+      const cr=new THREE.Mesh(new THREE.SphereGeometry(sr,8,6),
+        new THREE.MeshStandardMaterial({color:0x1e6614,roughness:0.92}));
+      cr.position.set(ox,oy,oz);tg.add(cr);
+    });
+    tg.position.set(px,0,pz);scene.add(tg);
+  });
 
   return{update(t){uni.uTime.value=t;},dispose(){}};
 };
