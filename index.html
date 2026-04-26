@@ -1880,26 +1880,74 @@ locationBuilders['persepolis'] = function(scene, camera, controls) {
   sunLight.position.set(-3,4,-5); scene.add(sunLight);
   scene.add(new THREE.HemisphereLight(0xff8822,0x1a0c04,0.4));
 
+  // Canvas texture helpers for Persepolis
+  function mkTexP(w,h,fn){
+    const c=document.createElement('canvas');c.width=w;c.height=h;
+    fn(c.getContext('2d'),w,h);
+    const t=new THREE.CanvasTexture(c);t.wrapS=t.wrapT=THREE.RepeatWrapping;return t;
+  }
+
+  // Achaemenid limestone — large dressed blocks with chisel marks and weathering
+  const _platTex=mkTexP(1024,1024,(ctx,W,H)=>{
+    ctx.fillStyle='#c8a870';ctx.fillRect(0,0,W,H);
+    const cols=5,rows=5,tw=W/cols,th=H/rows;
+    for(let r=0;r<rows;r++) for(let c2=0;c2<cols;c2++){
+      const x=c2*tw,y=r*th,sd=r*7+c2*13;
+      const v=0.78+(Math.abs(Math.sin(sd*3.7)))*0.22;
+      ctx.fillStyle=`rgb(${Math.round(200*v)},${Math.round(158*v)},${Math.round(105*v)})`;
+      ctx.fillRect(x+2,y+2,tw-4,th-4);
+      ctx.save();ctx.strokeStyle=`rgba(110,78,40,0.20)`;ctx.lineWidth=0.9;
+      for(let li=0;li<9;li++){const ly=y+4+li*(th-8)/9;ctx.beginPath();ctx.moveTo(x+3,ly);ctx.lineTo(x+tw-3+(Math.sin(sd*li*0.9)-0.5)*6,ly+(Math.cos(sd*li*1.3)-0.5)*th*0.05);ctx.stroke();}
+      for(let pi=0;pi<3;pi++){const px=x+(Math.abs(Math.sin(sd*pi*2.3)))*tw;const py=y+(Math.abs(Math.cos(sd*pi*1.9)))*th;ctx.beginPath();ctx.ellipse(px,py,tw*0.09+Math.abs(Math.sin(sd*pi))*tw*0.10,th*0.07,Math.PI*0.3+pi*0.8,0,Math.PI*2);ctx.fillStyle=`rgba(155,112,65,${0.10+Math.abs(Math.sin(sd*pi*1.1))*0.11})`;ctx.fill();}
+      ctx.restore();
+    }
+    ctx.strokeStyle='rgba(75,50,24,0.62)';ctx.lineWidth=3.5;
+    for(let i=0;i<=cols;i++){ctx.beginPath();ctx.moveTo(i*tw,0);ctx.lineTo(i*tw,H);ctx.stroke();}
+    for(let i=0;i<=rows;i++){ctx.beginPath();ctx.moveTo(0,i*th);ctx.lineTo(W,i*th);ctx.stroke();}
+  });
+
+  // Persepolis procession frieze — Achaemenid relief style
+  const _friezeTex=mkTexP(1024,256,(ctx,W,H)=>{
+    ctx.fillStyle='#c8a870';ctx.fillRect(0,0,W,H);
+    ctx.fillStyle='#b89050';ctx.fillRect(0,0,W,22);ctx.fillRect(0,H-22,W,22);
+    ctx.fillStyle='rgba(80,54,22,0.30)';ctx.fillRect(0,20,W,4);ctx.fillRect(0,H-24,W,4);
+    const figW=52,nFig=Math.floor(W/figW),figY=H*0.18,figH=H*0.70;
+    for(let fi=0;fi<nFig;fi++){
+      const fx=fi*figW+figW*0.5,sd=fi*7+1;
+      ctx.save();ctx.fillStyle='rgba(105,70,35,0.85)';
+      ctx.beginPath();ctx.moveTo(fx-figW*0.18,figY+figH*0.28);ctx.lineTo(fx-figW*0.14,figY+figH*0.02);ctx.lineTo(fx+figW*0.12,figY+figH*0.06);ctx.lineTo(fx+figW*0.16,figY+figH*0.32);ctx.lineTo(fx+figW*0.14,figY+figH*0.66);ctx.lineTo(fx-figW*0.10,figY+figH*0.72);ctx.closePath();ctx.fill();
+      ctx.beginPath();ctx.arc(fx-figW*0.03,figY-figH*0.05,figW*0.11,0,Math.PI*2);ctx.fill();
+      if(fi%2===0){ctx.beginPath();ctx.arc(fx-figW*0.03,figY-figH*0.13,figW*0.09,Math.PI,Math.PI*2);ctx.fill();}
+      else{ctx.fillRect(fx-figW*0.10,figY-figH*0.27,figW*0.13,figH*0.15);}
+      ctx.beginPath();ctx.moveTo(fx-figW*0.13,figY+figH*0.22);ctx.lineTo(fx+figW*0.26,figY+figH*0.16);
+      ctx.lineWidth=3.5;ctx.strokeStyle='rgba(105,70,35,0.82)';ctx.stroke();
+      if(fi%3===0){ctx.beginPath();ctx.moveTo(fx+figW*0.22,figY-figH*0.22);ctx.lineTo(fx+figW*0.22,figY+figH*0.70);ctx.lineWidth=3;ctx.stroke();ctx.beginPath();ctx.moveTo(fx+figW*0.14,figY-figH*0.18);ctx.lineTo(fx+figW*0.22,figY-figH*0.30);ctx.lineTo(fx+figW*0.30,figY-figH*0.18);ctx.closePath();ctx.fill();}
+      ctx.strokeStyle='rgba(88,55,22,0.30)';ctx.lineWidth=0.9;
+      for(let pl=0;pl<5;pl++){const px=fx-figW*0.10+pl*figW*0.052;ctx.beginPath();ctx.moveTo(px,figY+figH*0.34);ctx.lineTo(px+(Math.sin(pl*sd*0.5)-0.5)*3,figY+figH*0.70);ctx.stroke();}
+      ctx.restore();
+    }
+    const grd=ctx.createLinearGradient(0,0,W,0);grd.addColorStop(0,'rgba(0,0,0,0)');grd.addColorStop(0.5,'rgba(255,228,155,0.055)');grd.addColorStop(1,'rgba(0,0,0,0)');ctx.fillStyle=grd;ctx.fillRect(0,0,W,H);
+  });
+
+  // Fluted column stone
+  const _colTex=mkTexP(256,512,(ctx,W,H)=>{
+    ctx.fillStyle='#c8a872';ctx.fillRect(0,0,W,H);
+    const nF=20,fw=W/nF;
+    for(let f=0;f<nF;f++){
+      const x=f*fw;
+      const grd=ctx.createLinearGradient(x,0,x+fw,0);
+      grd.addColorStop(0,'rgba(148,112,65,0.72)');grd.addColorStop(0.28,'rgba(205,165,110,0.10)');grd.addColorStop(0.5,'rgba(218,178,116,0.0)');grd.addColorStop(0.72,'rgba(205,165,110,0.10)');grd.addColorStop(1,'rgba(148,112,65,0.72)');
+      ctx.fillStyle=grd;ctx.fillRect(x,0,fw,H);
+    }
+    for(let li=0;li<H;li+=8){ctx.fillStyle=`rgba(118,88,48,${0.040+(Math.abs(Math.sin(li*0.17)))*0.040})`;ctx.fillRect(0,li,W,2);}
+    ctx.fillStyle='rgba(100,72,42,0.12)';
+    [[40,105,28,18],[W-58,252,36,26],[82,382,24,16]].forEach(([px,py,pw,ph])=>{ctx.beginPath();ctx.ellipse(px,py,pw,ph,Math.PI*0.3,0,Math.PI*2);ctx.fill();});
+  });
+
   // Stone platform (terrace of Persepolis)
-  const platMat=new THREE.ShaderMaterial({side:THREE.DoubleSide,uniforms:uni,
-    vertexShader:`varying vec2 vUv;varying vec3 vWP;void main(){vUv=uv;vWP=(modelMatrix*vec4(position,1.0)).xyz;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`,
-    fragmentShader:`uniform float uTime;varying vec2 vUv;varying vec3 vWP;
-      float h(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5);}
-      float n(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.0-2.0*f);
-        return mix(mix(h(i),h(i+vec2(1,0)),f.x),mix(h(i+vec2(0,1)),h(i+vec2(1,1)),f.x),f.y);}
-      void main(){
-        // Large stone blocks with joints
-        vec2 su=vUv*vec2(28.0,28.0);
-        vec2 sf=fract(su)-0.5;
-        float joint=max(smoothstep(0.045,0.015,abs(sf.x)),smoothstep(0.045,0.015,abs(sf.y)));
-        float worn=n(vUv*14.0)*0.35+n(vUv*4.0)*0.25;
-        vec3 stone=vec3(0.68,0.54,0.38)+worn*vec3(0.12,0.10,0.06);
-        stone=mix(stone,vec3(0.35,0.28,0.20),joint*0.7);
-        // Sun highlight
-        float sl=smoothstep(0.7,1.0,1.0-length((vUv-vec2(0.3,0.4))*vec2(1.0,1.8)));
-        stone+=vec3(0.15,0.10,0.04)*sl;
-        gl_FragColor=vec4(stone,1.0);}`});
-  const plat=new THREE.Mesh(new THREE.PlaneGeometry(80,80,1,1),platMat);
+  const plat=new THREE.Mesh(new THREE.PlaneGeometry(80,80),
+    new THREE.MeshStandardMaterial({map:_platTex,roughness:0.82,metalness:0.0}));
+  _platTex.repeat.set(5,5);
   plat.rotation.x=-Math.PI/2; plat.position.y=0; scene.add(plat);
 
   // Stone staircase
@@ -1909,48 +1957,22 @@ locationBuilders['persepolis'] = function(scene, camera, controls) {
     s.position.set(0,step*0.22,14-step*0.65); scene.add(s);
   }
 
-  // Relief panel on staircase
-  const relMat=new THREE.ShaderMaterial({side:THREE.DoubleSide,
-    vertexShader:`varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`,
-    fragmentShader:`varying vec2 vUv;
-      void main(){
-        // Stylised procession frieze
-        float row=floor(vUv.y*4.0); float col=floor(vUv.x*12.0);
-        vec2 lc=vec2(fract(vUv.x*12.0)-0.5,fract(vUv.y*4.0)-0.5);
-        // Figure silhouette: ellipse body + circle head
-        float body=smoothstep(0.22,0.16,length(lc*vec2(1.0,1.5)+vec2(0.0,0.06)));
-        float head=smoothstep(0.14,0.08,length(lc-vec2(0.0,-0.30)));
-        float spear=smoothstep(0.04,0.0,abs(lc.x-0.18))*(1.0-smoothstep(-0.45,-0.05,lc.y));
-        float fig=clamp(body+head+spear,0.0,1.0);
-        float groove=max(smoothstep(0.01,0.0,abs(vUv.y*4.0-floor(vUv.y*4.0+0.5))),
-                         smoothstep(0.008,0.0,abs(vUv.x*12.0-floor(vUv.x*12.0+0.5))));
-        vec3 stone=vec3(0.70,0.56,0.40);
-        vec3 rel=mix(stone,stone*0.55,fig*0.7);
-        rel=mix(rel,stone*0.75,groove*0.4);
-        gl_FragColor=vec4(rel,1.0);}`});
-  const rel=new THREE.Mesh(new THREE.PlaneGeometry(14,2.2),relMat);
+  // Achaemenid relief panel
+  const rel=new THREE.Mesh(new THREE.PlaneGeometry(14,2.2),
+    new THREE.MeshStandardMaterial({map:_friezeTex,roughness:0.80,metalness:0.0}));
   rel.position.set(0,1.1,14.1); scene.add(rel);
 
-  // Columns: 2 rows × 8 (some broken)
-  const colShaft=new THREE.ShaderMaterial({
-    vertexShader:`varying vec2 vUv;varying vec3 vN;void main(){vUv=uv;vN=normalMatrix*normal;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`,
-    fragmentShader:`varying vec2 vUv;varying vec3 vN;
-      void main(){
-        float fl=sin(vUv.x*6.283*20.0)*0.5+0.5; // fluting
-        vec3 stone=mix(vec3(0.72,0.60,0.44),vec3(0.82,0.70,0.54),fl*0.5);
-        float worn=abs(sin(vUv.y*8.0+vUv.x*3.14))*0.12;
-        stone-=worn*0.1;
-        float lt=dot(normalize(vN),normalize(vec3(-0.4,0.8,0.3)))*0.5+0.5;
-        stone*=0.55+lt*0.55;
-        gl_FragColor=vec4(stone,1.0);}`});
+  // Columns with canvas fluted stone texture
   const heights=[22,22,22,22,20,22,22,21];
   const broken=[false,false,false,false,true,false,false,false];
   [-1,1].forEach(side=>{
     heights.forEach((h2,i)=>{
       const g=new THREE.Group();
       const ht=broken[i]?h2*0.55:h2;
-      // Shaft
-      const sh=new THREE.Mesh(new THREE.CylinderGeometry(0.32,0.38,ht,16),colShaft.clone());
+      // Shaft — canvas fluted texture
+      const colT=_colTex.clone();colT.repeat.set(1,Math.ceil(ht/2));
+      const sh=new THREE.Mesh(new THREE.CylinderGeometry(0.32,0.38,ht,20),
+        new THREE.MeshStandardMaterial({map:colT,roughness:0.72,metalness:0.02}));
       sh.position.y=ht/2; g.add(sh);
       if(!broken[i]){
         // Bell capital
@@ -2397,63 +2419,122 @@ locationBuilders['golestan'] = function(scene, camera, controls) {
 
   const uni={uTime:{value:0}};
 
-  // Lighting: many chandeliers
-  scene.add(new THREE.AmbientLight(0x7a5a30,1.0));
-  [[0,8.5,0],[0,8.5,-10],[0,8.5,10]].forEach(([x,y,z])=>{
-    const l=new THREE.PointLight(0xffd070,3.5,20,1.5);
-    l.position.set(x,y,z);scene.add(l);
+  function mkTex(w,h,fn){
+    const c=document.createElement('canvas');c.width=w;c.height=h;
+    fn(c.getContext('2d'),w,h);
+    const t=new THREE.CanvasTexture(c);t.wrapS=t.wrapT=THREE.RepeatWrapping;return t;
+  }
+
+  // Canvas: silver/gold mirror tesserae (Talar-e Aineh)
+  const _mirror=mkTex(512,512,(ctx,W,H)=>{
+    ctx.fillStyle='#0a0808';ctx.fillRect(0,0,W,H);
+    const cell=64,nC=W/cell;
+    ctx.strokeStyle='#c8900a';ctx.lineWidth=4;
+    for(let i=0;i<=nC;i++){ctx.beginPath();ctx.moveTo(i*cell,0);ctx.lineTo(i*cell,H);ctx.stroke();ctx.beginPath();ctx.moveTo(0,i*cell);ctx.lineTo(W,i*cell);ctx.stroke();}
+    const ts=9;
+    for(let r=0;r<nC;r++) for(let c2=0;c2<nC;c2++){
+      const ox=c2*cell,oy=r*cell,nT=Math.floor(cell/ts);
+      for(let tr=0;tr<nT;tr++) for(let tc=0;tc<nT;tc++){
+        const tx=ox+tc*ts+1,ty=oy+tr*ts+1;
+        if(tx+ts-2>ox+cell-3||ty+ts-2>oy+cell-3) continue;
+        const sd=(tr*17+tc*31+r*5+c2*11);
+        const v=0.60+(Math.abs(Math.sin(sd*7.3)))*0.32;
+        const w2=Math.abs(Math.sin(sd*2.7))*0.16;
+        ctx.fillStyle=`rgb(${Math.round(210*v+w2*28)},${Math.round(200*v+w2*9)},${Math.round(182*v)})`;
+        ctx.fillRect(tx,ty,ts-2,ts-2);
+        ctx.fillStyle=`rgba(255,252,235,${0.06+(Math.abs(Math.sin(sd*1.9)))*0.38})`;
+        ctx.fillRect(tx,ty,Math.ceil((ts-2)*0.4),Math.ceil((ts-2)*0.4));
+      }
+      const cx2=ox+cell/2,cy2=oy+cell/2;
+      ctx.strokeStyle='rgba(210,155,12,0.65)';ctx.lineWidth=1.5;
+      ctx.beginPath();ctx.arc(cx2,cy2,cell*0.33,0,Math.PI*2);ctx.stroke();
+      for(let p=0;p<8;p++){
+        ctx.save();ctx.translate(cx2,cy2);ctx.rotate(p*Math.PI/4);
+        ctx.beginPath();ctx.ellipse(0,-cell*0.18,cell*0.06,cell*0.18,0,0,Math.PI*2);
+        ctx.strokeStyle='rgba(200,148,10,0.50)';ctx.lineWidth=1.2;ctx.stroke();ctx.restore();
+      }
+      ctx.beginPath();ctx.arc(ox,oy,4,0,Math.PI*2);ctx.fillStyle='#d4a010';ctx.fill();
+    }
   });
+
+  // Canvas: polished marble mosaic floor
+  const _marble=mkTex(1024,1024,(ctx,W,H)=>{
+    ctx.fillStyle='#e8e0d0';ctx.fillRect(0,0,W,H);
+    const N=8,tw=W/N;
+    for(let r=0;r<N;r++) for(let c2=0;c2<N;c2++){
+      const x=c2*tw,y=r*tw,sd=r*17+c2*31;
+      const v=0.86+(Math.abs(Math.sin(sd*7.3)))*0.14;
+      const tp=sd%3;
+      if(tp===0) ctx.fillStyle=`rgb(${Math.round(240*v)},${Math.round(232*v)},${Math.round(215*v)})`;
+      else if(tp===1) ctx.fillStyle=`rgb(${Math.round(172*v)},${Math.round(162*v)},${Math.round(145*v)})`;
+      else ctx.fillStyle=`rgb(${Math.round(192*v)},${Math.round(156*v)},${Math.round(82*v)})`;
+      ctx.fillRect(x+2,y+2,tw-4,tw-4);
+      ctx.save();ctx.strokeStyle='rgba(140,128,112,0.30)';ctx.lineWidth=0.8;
+      for(let vi=0;vi<4;vi++){
+        const s2=sd*10+vi;const sx=x+(Math.abs(Math.sin(s2*3.7)))*tw;const sy=y+(Math.abs(Math.cos(s2*4.1)))*tw;
+        ctx.beginPath();ctx.moveTo(sx,sy);ctx.bezierCurveTo(sx+(Math.sin(s2*2.9)-0.5)*tw*0.6,sy+(Math.cos(s2*3.3)-0.5)*tw*0.6,sx+(Math.sin(s2*5.1)-0.5)*tw*0.7,sy+(Math.cos(s2*4.7)-0.5)*tw*0.7,sx+(Math.sin(s2*1.7)-0.5)*tw,sy+(Math.cos(s2*2.3)-0.5)*tw);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+    ctx.strokeStyle='rgba(175,128,8,0.58)';ctx.lineWidth=3;
+    for(let i=0;i<=N;i++){ctx.beginPath();ctx.moveTo(i*tw,0);ctx.lineTo(i*tw,H);ctx.stroke();ctx.beginPath();ctx.moveTo(0,i*tw);ctx.lineTo(W,i*tw);ctx.stroke();}
+    for(let r2=0;r2<=N;r2++) for(let c3=0;c3<=N;c3++){ctx.save();ctx.translate(c3*tw,r2*tw);ctx.rotate(Math.PI/4);ctx.fillStyle='rgba(178,132,12,0.55)';ctx.fillRect(-5,-5,10,10);ctx.restore();}
+  });
+
+  // Canvas: gilt coffered plasterwork ceiling
+  const _gilt=mkTex(512,512,(ctx,W,H)=>{
+    ctx.fillStyle='#2a1404';ctx.fillRect(0,0,W,H);
+    const N=6,tw=W/N;
+    for(let r=0;r<N;r++) for(let c2=0;c2<N;c2++){
+      const cx2=c2*tw+tw/2,cy2=r*tw+tw/2;
+      ctx.fillStyle='#3d1e06';ctx.fillRect(c2*tw+2,r*tw+2,tw-4,tw-4);
+      const R=tw*0.40,ri=R*0.38;
+      ctx.beginPath();
+      for(let i=0;i<16;i++){const a=i*Math.PI/8;const r2=i%2===0?R:ri;i===0?ctx.moveTo(cx2+Math.cos(a)*r2,cy2+Math.sin(a)*r2):ctx.lineTo(cx2+Math.cos(a)*r2,cy2+Math.sin(a)*r2);}
+      ctx.closePath();ctx.fillStyle='#c89010';ctx.fill();
+      ctx.beginPath();
+      for(let i=0;i<8;i++){const a=i*Math.PI/4;i===0?ctx.moveTo(cx2+Math.cos(a)*R*0.30,cy2+Math.sin(a)*R*0.30):ctx.lineTo(cx2+Math.cos(a)*R*0.30,cy2+Math.sin(a)*R*0.30);}
+      ctx.closePath();ctx.fillStyle='#f0e0a8';ctx.fill();ctx.strokeStyle='#e0c018';ctx.lineWidth=2;ctx.stroke();
+      ctx.strokeStyle='#b07e10';ctx.lineWidth=1.5;
+      ctx.beginPath();ctx.arc(cx2,cy2,R*0.84,0,Math.PI*2);ctx.stroke();
+      ctx.beginPath();ctx.arc(cx2,cy2,R*0.57,0,Math.PI*2);ctx.stroke();
+      ctx.strokeStyle='#c09012';ctx.lineWidth=2.5;ctx.strokeRect(c2*tw+5,r*tw+5,tw-10,tw-10);
+      [[c2*tw+10,r*tw+10],[c2*tw+tw-10,r*tw+10],[c2*tw+10,r*tw+tw-10],[c2*tw+tw-10,r*tw+tw-10]].forEach(([lx,ly])=>{ctx.beginPath();ctx.arc(lx,ly,3.5,0,Math.PI*2);ctx.fillStyle='#d4a814';ctx.fill();});
+    }
+    ctx.strokeStyle='rgba(0,0,0,0.60)';ctx.lineWidth=3;
+    for(let i=0;i<=N;i++){ctx.beginPath();ctx.moveTo(i*tw,0);ctx.lineTo(i*tw,H);ctx.stroke();ctx.beginPath();ctx.moveTo(0,i*tw);ctx.lineTo(W,i*tw);ctx.stroke();}
+  });
+
+  // Lighting
+  scene.add(new THREE.AmbientLight(0x7a5a30,1.0));
+  [[0,8.5,0],[0,8.5,-10],[0,8.5,10]].forEach(([x,y,z])=>{const l=new THREE.PointLight(0xffd070,3.5,20,1.5);l.position.set(x,y,z);scene.add(l);});
   scene.add(new THREE.HemisphereLight(0xffeedd,0x220c08,0.5));
 
-  // Floor: polished marble mosaic
-  const flMat=new THREE.ShaderMaterial({side:THREE.FrontSide,uniforms:uni,
-    vertexShader:`varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`,
-    fragmentShader:`varying vec2 vUv;uniform float uTime;
-      void main(){
-        vec2 su=vUv*vec2(20.0,20.0);vec2 sf=fract(su)-0.5;
-        float jt=max(smoothstep(0.03,0.005,abs(sf.x)),smoothstep(0.03,0.005,abs(sf.y)));
-        float h2=fract(dot(floor(su),vec2(0.37,0.73))*43.7);
-        vec3 white=vec3(0.90,0.86,0.80);vec3 grey=vec3(0.55,0.50,0.46);
-        vec3 gold3=vec3(0.70,0.52,0.12);
-        vec3 c=h2<0.45?white:h2<0.78?grey:gold3;
-        float diam=abs(sf.x)+abs(sf.y);c=mix(c*0.6,c,smoothstep(0.42,0.30,diam));
-        // Reflection of lights
-        float ref=sin(vUv.x*15.0+uTime*0.3)*sin(vUv.y*12.0-uTime*0.25)*0.1+0.05;
-        c+=ref*vec3(1.0,0.9,0.6);
-        c=mix(c,vec3(0.05,0.05,0.08),jt*0.45);
-        gl_FragColor=vec4(c,1.0);}`});
-  const floor=new THREE.Mesh(new THREE.PlaneGeometry(24,36),flMat);
+  // Floor
+  const flT=_marble.clone();flT.repeat.set(3,4);
+  const floor=new THREE.Mesh(new THREE.PlaneGeometry(24,36),new THREE.MeshStandardMaterial({map:flT,roughness:0.18,metalness:0.10}));
   floor.rotation.x=-Math.PI/2;floor.position.set(0,0,-6);scene.add(floor);
 
-  // Mirror mosaic walls — the signature Golestan feature
+  // Mirror walls — canvas tessera base + GPU shimmer animation
   function mirrorWall(w,h,pos,rotY){
-    const mat=new THREE.ShaderMaterial({side:THREE.DoubleSide,uniforms:uni,
+    const mT=_mirror.clone();mT.repeat.set(Math.ceil(w/3.2),Math.ceil(h/3.2));
+    const mat=new THREE.ShaderMaterial({side:THREE.DoubleSide,uniforms:{uTime:uni.uTime,uTex:{value:mT}},
       vertexShader:`varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`,
-      fragmentShader:`uniform float uTime;varying vec2 vUv;
+      fragmentShader:`uniform float uTime;uniform sampler2D uTex;varying vec2 vUv;
+        float hh(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5);}
         void main(){
-          // Tiny mirror tesserae
-          vec2 mu=vUv*vec2(80.0,50.0);vec2 mi=floor(mu);vec2 mf=fract(mu)-0.5;
-          float gap=max(smoothstep(0.06,0.02,abs(mf.x)),smoothstep(0.06,0.02,abs(mf.y)));
-          float rnd=fract(sin(dot(mi,vec2(127.1,311.7)))*43758.5);
-          // Each mirror reflects a random shimmer of chandelier light
-          float shimmer=sin(uTime*1.2+rnd*6.28)*0.5+0.5;
-          float shimmer2=cos(uTime*0.8+rnd*9.42+1.57)*0.5+0.5;
-          // Mirror base color: silver-gold tinted
-          vec3 silver=vec3(0.80,0.76,0.66);
-          vec3 warm=vec3(0.95,0.80,0.45)*shimmer*0.6;
-          vec3 cool=vec3(0.70,0.85,1.0)*shimmer2*0.25;
-          vec3 c=silver+warm+cool;
-          c*=0.5+shimmer*0.5;
-          // Gold ornamental dividers every 8 cells
-          vec2 dv=vUv*vec2(10.0,6.0);vec2 df=fract(dv)-0.5;
-          float divider=max(smoothstep(0.04,0.008,abs(df.x)),smoothstep(0.04,0.008,abs(df.y)));
-          c=mix(c,vec3(0.82,0.60,0.12),divider*0.7);
-          // Dark grout
-          c=mix(c,vec3(0.06,0.05,0.08),gap*0.8);
+          vec4 tex=texture2D(uTex,vUv);
+          vec2 mu=vUv*vec2(110.0,70.0);float rnd=hh(floor(mu));
+          float sh1=sin(uTime*1.1+rnd*6.28)*0.5+0.5;
+          float sh2=cos(uTime*0.72+rnd*9.1+1.2)*0.5+0.5;
+          vec3 c=tex.rgb;
+          c+=vec3(0.50,0.32,0.04)*sh1*rnd*0.42;
+          c+=vec3(0.0,0.06,0.18)*sh2*(1.0-rnd)*0.16;
+          c=clamp(c,0.0,1.0);
           gl_FragColor=vec4(c,1.0);}` });
     const m=new THREE.Mesh(new THREE.PlaneGeometry(w,h),mat);
-    m.position.copy(pos);m.rotation.y=rotY;scene.add(m);
-    return mat;
+    m.position.copy(pos);m.rotation.y=rotY;scene.add(m);return mat;
   }
 
   const mirrorMats=[];
@@ -2462,52 +2543,24 @@ locationBuilders['golestan'] = function(scene, camera, controls) {
   mirrorMats.push(mirrorWall(36,10,new THREE.Vector3(-12,5,-3),Math.PI/2));
   mirrorMats.push(mirrorWall(36,10,new THREE.Vector3( 12,5,-3),-Math.PI/2));
 
-  // Ceiling: ornate coffered gold plasterwork
-  const ceilMat=new THREE.ShaderMaterial({side:THREE.DoubleSide,uniforms:uni,
-    vertexShader:`varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`,
-    fragmentShader:`uniform float uTime;varying vec2 vUv;
-      void main(){
-        vec2 cu=vUv*vec2(12.0,12.0);vec2 cell=fract(cu)-0.5;
-        float r=length(cell);float ang=atan(cell.y,cell.x);
-        float star=cos(ang*4.0)*0.08+0.20;
-        float mask=smoothstep(star+0.02,star-0.02,r);
-        float ring1=smoothstep(0.014,0.0,abs(r-0.30));
-        float ring2=smoothstep(0.011,0.0,abs(r-0.18));
-        float spk=smoothstep(0.014,0.0,abs(sin(ang*8.0))*r*0.9);
-        float grid=max(smoothstep(0.018,0.0,abs(cell.x)),smoothstep(0.018,0.0,abs(cell.y)));
-        vec3 base=vec3(0.38,0.20,0.04);vec3 gold4=vec3(0.88,0.68,0.18);vec3 ivr=vec3(0.92,0.86,0.68);
-        vec3 c=base;
-        c=mix(c,ivr,mask*0.7);c=mix(c,gold4,ring1*0.85);c=mix(c,gold4*0.7,ring2*0.6);
-        c+=gold4*0.06*(sin(uTime*0.4)*0.5+0.5);
-        c=mix(c,base*0.5,(spk+grid)*0.35);
-        gl_FragColor=vec4(c,1.0);}` });
-  const ceil2=new THREE.Mesh(new THREE.PlaneGeometry(24,36),ceilMat);
+  // Ceiling
+  const cT=_gilt.clone();cT.repeat.set(3,5);
+  const ceil2=new THREE.Mesh(new THREE.PlaneGeometry(24,36),
+    new THREE.MeshStandardMaterial({map:cT,roughness:0.30,metalness:0.15,emissive:new THREE.Color(0.08,0.04,0.0),emissiveIntensity:0.28}));
   ceil2.rotation.x=Math.PI/2;ceil2.position.set(0,9.8,-6);scene.add(ceil2);
 
-  // Takhte Marmar (Marble Throne)
-  const throneBase=new THREE.Mesh(new THREE.BoxGeometry(6,0.6,3.5),
-    new THREE.MeshStandardMaterial({color:0xd4c4a0,roughness:0.5,metalness:0.05}));
+  // Takhte Marmar throne
+  const throneBase=new THREE.Mesh(new THREE.BoxGeometry(6,0.6,3.5),new THREE.MeshStandardMaterial({color:0xd4c4a0,roughness:0.45,metalness:0.06}));
   throneBase.position.set(0,0.3,-14);scene.add(throneBase);
-  const throne=new THREE.Mesh(new THREE.BoxGeometry(3.5,2.5,1.8),
-    new THREE.ShaderMaterial({side:THREE.DoubleSide,
-      vertexShader:`varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`,
-      fragmentShader:`varying vec2 vUv;
-        void main(){
-          vec2 mu=vUv*vec2(40.0,25.0);vec2 mi=floor(mu);vec2 mf=fract(mu)-0.5;
-          float gap=max(smoothstep(0.06,0.02,abs(mf.x)),smoothstep(0.06,0.02,abs(mf.y)));
-          float rnd=fract(sin(dot(mi,vec2(127.1,311.7)))*43758.5);
-          vec3 c=mix(vec3(0.78,0.72,0.62),vec3(0.92,0.86,0.60)+rnd*vec3(0.1,0.08,0.02),0.4);
-          c=mix(c,vec3(0.05,0.04,0.06),gap*0.7);
-          gl_FragColor=vec4(c,1.0);}` }));
+  const thrT=_marble.clone();thrT.repeat.set(4,2.5);
+  const throne=new THREE.Mesh(new THREE.BoxGeometry(3.5,2.5,1.8),new THREE.MeshStandardMaterial({map:thrT,roughness:0.22,metalness:0.05}));
   throne.position.set(0,1.8,-14.2);scene.add(throne);
 
-  // Hanging chandeliers
+  // Chandeliers
   [0,-12,12].forEach(z=>{
-    const chain=new THREE.Mesh(new THREE.CylinderGeometry(0.03,0.03,2.5,6),
-      new THREE.MeshStandardMaterial({color:0xd4a020,metalness:0.8,roughness:0.3}));
+    const chain=new THREE.Mesh(new THREE.CylinderGeometry(0.03,0.03,2.5,6),new THREE.MeshStandardMaterial({color:0xd4a020,metalness:0.8,roughness:0.3}));
     chain.position.set(0,8.8,z);scene.add(chain);
-    const body2=new THREE.Mesh(new THREE.SphereGeometry(0.9,12,8),
-      new THREE.MeshStandardMaterial({color:0xd4a020,metalness:0.7,roughness:0.2}));
+    const body2=new THREE.Mesh(new THREE.SphereGeometry(0.9,12,8),new THREE.MeshStandardMaterial({color:0xd4a020,metalness:0.7,roughness:0.2}));
     body2.position.set(0,7.2,z);scene.add(body2);
   });
 
@@ -2544,6 +2597,48 @@ locationBuilders['badab-e-surt'] = function(scene, camera, controls) {
   sunL.position.set(-4,3,-6);scene.add(sunL);
   scene.add(new THREE.HemisphereLight(0xff6622,0x1a0802,0.4));
 
+  function mkTexB(w,h,fn){const c=document.createElement('canvas');c.width=w;c.height=h;fn(c.getContext('2d'),w,h);const t=new THREE.CanvasTexture(c);t.wrapS=t.wrapT=THREE.RepeatWrapping;return t;}
+
+  // 4 travertine canvas textures spanning cream → orange → rust
+  const _travTexes=(()=>{
+    const palettes=[
+      [[0.90,0.83,0.68],[0.82,0.72,0.55]],  // cream (top steps)
+      [[0.82,0.56,0.28],[0.72,0.44,0.16]],  // tan-orange
+      [[0.80,0.34,0.08],[0.68,0.26,0.06]],  // orange
+      [[0.56,0.14,0.04],[0.44,0.10,0.03]],  // deep rust (bottom)
+    ];
+    return palettes.map(([col1,col2])=>mkTexB(512,256,(ctx,W,H)=>{
+      const r1=Math.round(col1[0]*255),g1=Math.round(col1[1]*255),b1=Math.round(col1[2]*255);
+      ctx.fillStyle=`rgb(${r1},${g1},${b1})`;ctx.fillRect(0,0,W,H);
+      // Horizontal mineral deposit bands
+      const bandH=6;
+      for(let y=0;y<H;y+=bandH){
+        const t2=y/H;const blend=col1.map((v,i)=>v*(1-t2)+col2[i]*t2);
+        const bv=0.88+(Math.abs(Math.sin(y*0.18)))*0.12;
+        ctx.fillStyle=`rgb(${Math.round(blend[0]*255*bv)},${Math.round(blend[1]*255*bv)},${Math.round(blend[2]*255*bv)})`;
+        ctx.fillRect(0,y,W,bandH);
+        // Crystalline edge line
+        if(Math.abs(Math.sin(y*0.3))>0.7){
+          ctx.strokeStyle=`rgba(255,240,200,${0.25+(Math.abs(Math.sin(y*0.5)))*0.20})`;
+          ctx.lineWidth=0.8;ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y+(Math.sin(y*0.4)-0.5)*2);ctx.stroke();
+        }
+      }
+      // Porous travertine holes (characteristic mineral bubbles)
+      ctx.fillStyle='rgba(40,20,8,0.55)';
+      for(let pi=0;pi<25;pi++){
+        const px=(pi*W/25+pi*37)%W,py=(pi*H/25+pi*53)%H;
+        const pr=1+Math.abs(Math.sin(pi*1.7))*4;
+        ctx.beginPath();ctx.ellipse(px,py,pr,pr*0.6,Math.PI*0.3+pi*0.4,0,Math.PI*2);ctx.fill();
+      }
+      // Flow marks
+      ctx.strokeStyle='rgba(255,200,100,0.15)';ctx.lineWidth=1.2;
+      for(let fi=0;fi<8;fi++){
+        ctx.beginPath();ctx.moveTo((fi*W/8)%W,0);
+        ctx.bezierCurveTo((fi*W/8+30)%W,H*0.3,(fi*W/8-20+W)%W,H*0.6,(fi*W/8+15)%W,H);ctx.stroke();
+      }
+    }));
+  })();
+
   // Terraced geometry: 14 steps descending
   const nSteps=14;
   for(let s=0;s<nSteps;s++){
@@ -2552,21 +2647,12 @@ locationBuilders['badab-e-surt'] = function(scene, camera, controls) {
     const z=-s*2.8+12;
     const y=nSteps*0.5-s*0.5;
 
-    // Travertine edge (riser)
-    const rMat=new THREE.ShaderMaterial({side:THREE.DoubleSide,
-      uniforms:{uS:{value:s/nSteps}},
-      vertexShader:`varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`,
-      fragmentShader:`uniform float uS;varying vec2 vUv;
-        void main(){
-          // Color shifts from cream→orange→rust as steps go down
-          vec3 cream=vec3(0.90,0.82,0.68);vec3 org=vec3(0.80,0.35,0.08);vec3 rust=vec3(0.58,0.14,0.04);
-          vec3 c=uS<0.4?mix(cream,org,uS/0.4):mix(org,rust,(uS-0.4)/0.6);
-          float vein=abs(sin(vUv.y*18.0+vUv.x*6.0))*0.08;
-          c+=vein*vec3(0.15,0.10,0.05);
-          gl_FragColor=vec4(c,1.0);}` });
-    const riser=new THREE.Mesh(new THREE.PlaneGeometry(w,0.5),rMat);
-    riser.position.set(0,y+0.25,z+0.01);
-    scene.add(riser);
+    // Travertine riser — canvas texture
+    const travIdx=Math.min(3,Math.floor(t*4));
+    const rT=_travTexes[travIdx].clone();rT.repeat.set(Math.ceil(w/3),1);
+    const riser=new THREE.Mesh(new THREE.PlaneGeometry(w,0.5),
+      new THREE.MeshStandardMaterial({map:rT,roughness:0.75,metalness:0.0,side:THREE.DoubleSide}));
+    riser.position.set(0,y+0.25,z+0.01);scene.add(riser);
 
     // Water pool surface on each terrace
     const poolUni={uTime:{value:0},uS:{value:s/nSteps}};
@@ -2574,40 +2660,23 @@ locationBuilders['badab-e-surt'] = function(scene, camera, controls) {
       vertexShader:`varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`,
       fragmentShader:`uniform float uTime;uniform float uS;varying vec2 vUv;
         void main(){
-          // Water color: turquoise at top → deep orange at bottom
           vec3 tq=vec3(0.30,0.68,0.62);vec3 org2=vec3(0.75,0.32,0.05);
           vec3 base=mix(tq,org2,uS);
-          // Ripples
-          float rip=sin(length(vUv-0.5)*22.0-uTime*2.5)*0.04;
-          rip+=sin((vUv.x-0.5)*16.0-uTime*2.0)*0.03;
+          float rip=sin(length(vUv-0.5)*22.0-uTime*2.5)*0.04+sin((vUv.x-0.5)*16.0-uTime*2.0)*0.03;
           base+=rip*vec3(0.20,0.25,0.30);
-          // Edge evaporation white
           float ef=smoothstep(0.0,0.08,min(min(vUv.x,1.0-vUv.x),min(vUv.y,1.0-vUv.y)));
-          float white=1.0-ef;
-          base=mix(base,vec3(0.92,0.88,0.80),white*0.65);
-          // Sunset reflection
+          base=mix(base,vec3(0.92,0.88,0.80),(1.0-ef)*0.65);
           base+=vec3(0.45,0.18,0.04)*0.18*(sin(uTime*0.3)*0.5+0.5);
           gl_FragColor=vec4(base,ef*0.88+0.10);}` });
     const pool2=new THREE.Mesh(new THREE.PlaneGeometry(w-0.4,2.2),pMat);
-    pool2.rotation.x=-Math.PI/2;
-    pool2.position.set(0,y+0.02,z-1.0);
-    pool2.userData.pUni=poolUni;
-    scene.add(pool2);
+    pool2.rotation.x=-Math.PI/2;pool2.position.set(0,y+0.02,z-1.0);
+    pool2.userData.pUni=poolUni;scene.add(pool2);
 
-    // Travertine floor of terrace
-    const tMat=new THREE.ShaderMaterial({side:THREE.FrontSide,
-      uniforms:{uS:{value:s/nSteps}},
-      vertexShader:`varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`,
-      fragmentShader:`uniform float uS;varying vec2 vUv;
-        void main(){
-          vec3 cream2=vec3(0.85,0.76,0.60);vec3 org3=vec3(0.72,0.32,0.08);vec3 rust2=vec3(0.52,0.12,0.04);
-          vec3 c=uS<0.4?mix(cream2,org3,uS/0.4):mix(org3,rust2,(uS-0.4)/0.6);
-          float n=abs(sin(vUv.x*12.0+vUv.y*7.0))*0.06;c+=n;
-          gl_FragColor=vec4(c,1.0);}` });
-    const terr=new THREE.Mesh(new THREE.PlaneGeometry(w,2.5),tMat);
-    terr.rotation.x=-Math.PI/2;
-    terr.position.set(0,y,z-1.3);
-    scene.add(terr);
+    // Travertine terrace floor — canvas texture
+    const terT=_travTexes[travIdx].clone();terT.repeat.set(Math.ceil(w/3),1);
+    const terr=new THREE.Mesh(new THREE.PlaneGeometry(w,2.5),
+      new THREE.MeshStandardMaterial({map:terT,roughness:0.78,metalness:0.0}));
+    terr.rotation.x=-Math.PI/2;terr.position.set(0,y,z-1.3);scene.add(terr);
   }
 
   // Background hills
@@ -2673,25 +2742,56 @@ locationBuilders['yazd'] = function(scene, camera, controls) {
   sunL.position.set(3,5,-4);scene.add(sunL);
   scene.add(new THREE.HemisphereLight(0xddaa66,0x3a2010,0.4));
 
-  // Adobe material function
+  function mkTexY(w,h,fn){const c=document.createElement('canvas');c.width=w;c.height=h;fn(c.getContext('2d'),w,h);const t=new THREE.CanvasTexture(c);t.wrapS=t.wrapT=THREE.RepeatWrapping;return t;}
+
+  // Pre-build 5 adobe textures with tone/crack variation
+  const _adobeTexes=(()=>{
+    const arr=[];
+    for(let seed=0;seed<5;seed++){
+      arr.push(mkTexY(512,512,(ctx,W,H)=>{
+        const bv=[0.72,0.68,0.75,0.70,0.66][seed];
+        ctx.fillStyle=`rgb(${Math.round(185*bv)},${Math.round(143*bv)},${Math.round(92*bv)})`;ctx.fillRect(0,0,W,H);
+        // Horizontal construction layers (sun-dried mud courses)
+        const lh=20;
+        for(let l=0;l<H;l+=lh){
+          const cv=0.92+(Math.abs(Math.sin((l+seed*77)*0.07)))*0.08;
+          ctx.fillStyle=`rgb(${Math.round(180*bv*cv)},${Math.round(140*bv*cv)},${Math.round(88*bv*cv)})`;ctx.fillRect(0,l+2,W,lh-3);
+          ctx.fillStyle=`rgba(65,40,18,${0.16+(Math.abs(Math.sin(l*0.09+seed)))*0.08})`;ctx.fillRect(0,l,W,2);
+        }
+        // Vertical joints (offset per course, irregular)
+        ctx.strokeStyle=`rgba(70,45,20,0.16)`;ctx.lineWidth=1.2;
+        for(let l=0,row=0;l<H;l+=lh,row++){
+          const off=row%2===0?0:W*0.20;
+          for(let x=off;x<W+off;x+=W*0.22+(seed*17)%30){
+            const jx=x%W;
+            ctx.beginPath();ctx.moveTo(jx+(Math.sin(row*jx*0.005)-0.5)*5,l+2);ctx.lineTo(jx+(Math.sin(row*jx*0.005+1)-0.5)*5,l+lh-1);ctx.stroke();
+          }
+        }
+        // Desiccation cracks
+        ctx.strokeStyle=`rgba(85,55,25,0.22)`;ctx.lineWidth=0.8;
+        for(let ci=0;ci<12+seed*2;ci++){
+          const sx=(ci*W/12+seed*37)%W,sy=(ci*H/12+seed*53)%H;
+          ctx.beginPath();ctx.moveTo(sx,sy);
+          ctx.bezierCurveTo(sx+(Math.sin(ci*seed*2.3+1)-0.5)*55,sy+(Math.cos(ci*seed*1.7+2)-0.5)*45,sx+(Math.cos(ci*seed*3.1+3)-0.5)*45,sy+(Math.sin(ci*seed*2.1+4)-0.5)*65,sx+(Math.sin(ci*seed*1.3+5)-0.5)*95,sy+(Math.cos(ci*seed*2.7+6)-0.5)*85);
+          ctx.stroke();
+        }
+        // Surface texture patches
+        for(let pi=0;pi<40;pi++){
+          const px=(pi*(W/40)+seed*23)%W,py=(pi*(H/40)+seed*41)%H;
+          const pr=6+Math.abs(Math.sin(pi*seed*0.3))*14;
+          ctx.beginPath();ctx.arc(px,py,pr,0,Math.PI*2);
+          ctx.fillStyle=`rgba(${135+seed*5},${100+seed*4},${60+seed*2},0.12)`;ctx.fill();
+        }
+      }));
+    }
+    return arr;
+  })();
+
   function adobeMat(seed){
-    return new THREE.ShaderMaterial({side:THREE.DoubleSide,
-      uniforms:{uSeed:{value:seed}},
-      vertexShader:`varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`,
-      fragmentShader:`uniform float uSeed;varying vec2 vUv;
-        float h(vec2 p){return fract(sin(dot(p+uSeed,vec2(127.1,311.7)))*43758.5);}
-        float n(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.0-2.0*f);
-          return mix(mix(h(i),h(i+vec2(1,0)),f.x),mix(h(i+vec2(0,1)),h(i+vec2(1,1)),f.x),f.y);}
-        void main(){
-          float worn=n(vUv*8.0)*0.3+n(vUv*20.0)*0.12;
-          vec3 adobe=vec3(0.72+worn*0.08,0.56+worn*0.06,0.38+worn*0.04);
-          // Horizontal construction layers
-          float layers=smoothstep(0.025,0.0,abs(fract(vUv.y*14.0)-0.5)-0.46)*0.18;
-          adobe-=layers;
-          // Some cracks
-          float crack=smoothstep(0.008,0.0,abs(n(vUv*30.0)-0.5))*0.12;
-          adobe-=crack;
-          gl_FragColor=vec4(adobe,1.0);}` });
+    const idx=Math.abs(Math.round(seed*3.7))%_adobeTexes.length;
+    const t=_adobeTexes[idx].clone();
+    t.repeat.set(2+(idx%2),1+(idx%2));
+    return new THREE.MeshStandardMaterial({map:t,roughness:0.92,metalness:0.0,side:THREE.DoubleSide});
   }
 
   // Sandy ground
@@ -2830,67 +2930,99 @@ locationBuilders['dasht-e-lut'] = function(scene, camera, controls) {
   const sunL=new THREE.DirectionalLight(0xffffff,3.5);
   sunL.position.set(0,10,-3);scene.add(sunL);
 
+  function mkTexL(w,h,fn){const c=document.createElement('canvas');c.width=w;c.height=h;fn(c.getContext('2d'),w,h);const t=new THREE.CanvasTexture(c);t.wrapS=t.wrapT=THREE.RepeatWrapping;return t;}
+
+  // Salt flat — hand-drawn Voronoi polygon cracks
+  const _saltTex=mkTexL(1024,1024,(ctx,W,H)=>{
+    ctx.fillStyle='#c8b890';ctx.fillRect(0,0,W,H);
+    // Generate Voronoi sites
+    const N=140;
+    const sites=[];
+    for(let i=0;i<N;i++) sites.push([(i*W/N+i*37)%W,(i*H/N+i*53)%H]);
+    // Draw polygon regions with slightly different tones
+    for(let si=0;si<N;si++){
+      const v=0.82+(Math.abs(Math.sin(si*3.7)))*0.18;
+      ctx.fillStyle=`rgb(${Math.round(202*v)},${Math.round(184*v)},${Math.round(145*v)})`;
+      // Simple bounding approach: fill large rect at site then clip won't work easily
+      // Instead draw filled point and rely on crack lines to define cells
+      ctx.beginPath();ctx.arc(sites[si][0],sites[si][1],W/Math.sqrt(N)*0.48,0,Math.PI*2);ctx.fill();
+    }
+    // Blend pass for smoother base
+    ctx.fillStyle='rgba(200,182,142,0.45)';ctx.fillRect(0,0,W,H);
+    // Draw crack lines between nearby sites
+    ctx.strokeStyle='rgba(80,60,30,0.72)';ctx.lineWidth=2.5;
+    for(let i=0;i<N;i++){
+      for(let j=i+1;j<N;j++){
+        const dx=sites[j][0]-sites[i][0],dy=sites[j][1]-sites[i][1];
+        const dist=Math.sqrt(dx*dx+dy*dy);
+        if(dist<W/9){
+          const mx=(sites[i][0]+sites[j][0])/2,my=(sites[i][1]+sites[j][1])/2;
+          ctx.lineWidth=1.8+Math.abs(Math.sin(i*j*0.001))*2;
+          ctx.strokeStyle=`rgba(${72+Math.round(Math.sin(i*7)*12)},${50+Math.round(Math.sin(j*5)*8)},${22},${0.55+Math.abs(Math.sin(i+j))*0.25})`;
+          ctx.beginPath();ctx.moveTo(sites[i][0],sites[i][1]);ctx.lineTo(mx,my);ctx.stroke();
+          ctx.beginPath();ctx.moveTo(sites[j][0],sites[j][1]);ctx.lineTo(mx,my);ctx.stroke();
+        }
+      }
+    }
+    // Shadow along crack edges
+    ctx.strokeStyle='rgba(140,108,60,0.35)';ctx.lineWidth=5;
+    for(let i=0;i<N;i++){
+      for(let j=i+1;j<N;j++){
+        const dx=sites[j][0]-sites[i][0],dy=sites[j][1]-sites[i][1];
+        if(Math.sqrt(dx*dx+dy*dy)<W/9){
+          const mx=(sites[i][0]+sites[j][0])/2,my=(sites[i][1]+sites[j][1])/2;
+          ctx.beginPath();ctx.moveTo(sites[i][0]+1,sites[i][1]+1);ctx.lineTo(mx+1,my+1);ctx.stroke();
+        }
+      }
+    }
+  });
+
+  // Rock erosion texture for kaluts
+  const _rockTex=mkTexL(512,512,(ctx,W,H)=>{
+    ctx.fillStyle='#6a4a2a';ctx.fillRect(0,0,W,H);
+    // Horizontal erosion bands (wind scouring)
+    const bandH=12;
+    for(let y=0;y<H;y+=bandH){
+      const dark=y%24<12;
+      const v=dark?0.62:0.78;const sd=Math.sin(y*0.09)*0.08;
+      ctx.fillStyle=`rgb(${Math.round((108+sd*20)*v)},${Math.round((75+sd*15)*v)},${Math.round((38+sd*10)*v)})`;
+      ctx.fillRect(0,y,W,bandH);
+      // Rough edge
+      if(!dark){
+        ctx.strokeStyle='rgba(180,130,70,0.18)';ctx.lineWidth=1;
+        ctx.beginPath();ctx.moveTo(0,y+bandH-1);
+        for(let x=0;x<W;x+=8) ctx.lineTo(x,y+bandH-1+(Math.sin(x*y*0.001+y)*2));
+        ctx.stroke();
+      }
+    }
+    // Vertical wind grooves
+    ctx.strokeStyle='rgba(50,32,14,0.25)';ctx.lineWidth=1.2;
+    for(let x=0;x<W;x+=W/30){
+      ctx.beginPath();ctx.moveTo(x+(Math.sin(x*0.1)-0.5)*4,0);
+      for(let y2=0;y2<H;y2+=20) ctx.lineTo(x+(Math.sin(y2*0.03+x*0.1)-0.5)*6,y2);
+      ctx.stroke();
+    }
+    // Surface gravel dots
+    ctx.fillStyle='rgba(90,65,30,0.30)';
+    for(let pi=0;pi<80;pi++){
+      const px=(pi*W/80+pi*37)%W,py=(pi*H/80+pi*53)%H;
+      ctx.beginPath();ctx.arc(px,py,2+Math.abs(Math.sin(pi*1.7))*4,0,Math.PI*2);ctx.fill();
+    }
+  });
+
   // Vast flat cracked desert floor
-  const flMat=new THREE.ShaderMaterial({side:THREE.FrontSide,uniforms:uni,
-    vertexShader:`varying vec2 vUv;varying vec3 vWP;void main(){vUv=uv;vWP=(modelMatrix*vec4(position,1.0)).xyz;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`,
-    fragmentShader:`uniform float uTime;varying vec2 vUv;varying vec3 vWP;
-      float h(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5);}
-      float n(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.0-2.0*f);
-        return mix(mix(h(i),h(i+vec2(1,0)),f.x),mix(h(i+vec2(0,1)),h(i+vec2(1,1)),f.x),f.y);}
-      void main(){
-        // Polygon cracked salt flats
-        vec2 su=vUv*40.0;
-        float crack=0.0;
-        // Voronoi-like crack pattern
-        vec2 si=floor(su);vec2 sf=fract(su);
-        float minD=1.0;
-        for(int dy=-1;dy<=1;dy++)for(int dx=-1;dx<=1;dx++){
-          vec2 nb=vec2(float(dx),float(dy));vec2 p2=si+nb;
-          vec2 rand2=vec2(h(p2),h(p2+17.3));
-          float d=length(sf-nb-rand2);minD=min(minD,d);}
-        float poly=smoothstep(0.04,0.0,minD-0.35);
-        vec3 sand=vec3(0.78+n(vUv*5.0)*0.06,0.62+n(vUv*7.0)*0.04,0.42+n(vUv*9.0)*0.03);
-        vec3 crack2=vec3(0.38,0.28,0.18);
-        vec3 c=mix(sand,crack2,poly*0.65);
-        // Heat shimmer near horizon
-        float dist2=length(vUv-0.5);
-        float haze2=smoothstep(0.35,0.5,dist2)*sin(vWP.x*0.8+uTime*1.2)*0.03;
-        c+=haze2*0.05;
-        gl_FragColor=vec4(c,1.0);}`});
-  const fl2=new THREE.Mesh(new THREE.PlaneGeometry(160,160,1,1),flMat);
+  const flTex=_saltTex.clone();flTex.repeat.set(8,8);
+  const fl2=new THREE.Mesh(new THREE.PlaneGeometry(160,160),
+    new THREE.MeshStandardMaterial({map:flTex,roughness:0.90,metalness:0.0}));
   fl2.rotation.x=-Math.PI/2;scene.add(fl2);
 
   // Kaluts (yardangs): tall eroded clay towers, wind-sculpted
   function kalut(x,z,h4,w,d){
     const g=new THREE.Group();
-    const mat=new THREE.ShaderMaterial({side:THREE.DoubleSide,
-      vertexShader:`varying vec2 vUv;varying vec3 vN;void main(){vUv=uv;vN=normalMatrix*normal;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`,
-      fragmentShader:`varying vec2 vUv;varying vec3 vN;
-        float h2(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5);}
-        float n2(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.0-2.0*f);
-          return mix(mix(h2(i),h2(i+vec2(1,0)),f.x),mix(h2(i+vec2(0,1)),h2(i+vec2(1,1)),f.x),f.y);}
-        void main(){
-          float worn=n2(vUv*6.0)*0.25+n2(vUv*18.0)*0.12;
-          // Dark at base (shadow), lighter at top
-          float vert=smoothstep(0.0,0.6,vUv.y);
-          vec3 dark=vec3(0.38,0.25,0.14);vec3 light2=vec3(0.72,0.58,0.40);
-          vec3 c=mix(dark,light2,vert+worn*0.3);
-          // Wind erosion horizontal bands
-          float band=sin(vUv.y*22.0)*0.03;c+=band;
-          float lt=dot(normalize(vN),normalize(vec3(0.0,1.0,-0.5)))*0.5+0.5;
-          c*=0.45+lt*0.65;gl_FragColor=vec4(c,1.0);}` });
-    // Tapered prism shape (wider at base)
-    const verts=[];const idxs=[];
-    const bw2=w,bd2=d,tw2=w*0.45,td2=d*0.45;
-    // Build 8-vertex box with tapered top
-    const pts2=[
-      [-bw2/2,0,-bd2/2],[bw2/2,0,-bd2/2],[bw2/2,0,bd2/2],[-bw2/2,0,bd2/2],
-      [-tw2/2,h4,-td2/2],[tw2/2,h4,-td2/2],[tw2/2,h4,td2/2],[-tw2/2,h4,td2/2]
-    ];
-    // Use BoxGeometry + scale: simpler
-    const box=new THREE.Mesh(new THREE.BoxGeometry(w,h4,d,1,4,1),mat.clone());
+    const rockT=_rockTex.clone();rockT.repeat.set(1,Math.ceil(h4/4));
+    const mat=new THREE.MeshStandardMaterial({map:rockT,roughness:0.88,metalness:0.0,side:THREE.DoubleSide});
+    const box=new THREE.Mesh(new THREE.BoxGeometry(w,h4,d,1,4,1),mat);
     box.position.y=h4/2;
-    // Scale top half narrower via vertex deformation
     const bVerts=box.geometry.attributes.position;
     for(let vi=0;vi<bVerts.count;vi++){
       const vy=bVerts.getY(vi);const nt=(vy+h4/2)/h4;
@@ -2963,38 +3095,63 @@ locationBuilders['tabriz'] = function(scene, camera, controls) {
     const sl=new THREE.SpotLight(0xffd090,3.0,14,Math.PI/8,0.4,1.5); sl.position.set(0,10.5,z); scene.add(sl);
   });
 
-  // Brick material
+  function mkTexT(w,h,fn){const c=document.createElement('canvas');c.width=w;c.height=h;fn(c.getContext('2d'),w,h);const t=new THREE.CanvasTexture(c);t.wrapS=t.wrapT=THREE.RepeatWrapping;return t;}
+
+  // Canvas running-bond brick — aged Tabriz terracotta
+  const _brickTexes=[0,1,2].map(seed=>mkTexT(512,256,(ctx,W,H)=>{
+    ctx.fillStyle=`rgb(${180+seed*4},${148+seed*3},${110+seed*2})`;ctx.fillRect(0,0,W,H);
+    const bW=42,bH=20,rows=Math.ceil(H/bH)+1,cols=Math.ceil(W/bW)+2;
+    for(let r=0;r<rows;r++){
+      const ox=r%2===0?0:bW/2;
+      for(let c2=0;c2<cols;c2++){
+        const x=c2*bW-ox,y=r*bH;
+        const sd=(r*cols+c2)*7+seed*31;
+        const bv=0.70+(Math.abs(Math.sin(sd*7.1)))*0.26;
+        const fire=Math.abs(Math.sin(sd*1.3))*0.12;
+        ctx.fillStyle=`rgb(${Math.round((148+seed*4)*bv+fire*20)},${Math.round((95+seed*3)*bv)},${Math.round((48+seed*2)*bv)})`;
+        ctx.fillRect(x+2,y+3,bW-4,bH-5);
+        // Top edge highlight (fired glaze)
+        ctx.fillStyle=`rgba(220,185,140,${0.08+(Math.abs(Math.sin(sd*2.7)))*0.12})`;
+        ctx.fillRect(x+2,y+3,bW-4,2);
+        // Bottom edge shadow
+        ctx.fillStyle=`rgba(60,30,10,${0.10+(Math.abs(Math.sin(sd*1.9)))*0.08})`;
+        ctx.fillRect(x+2,y+bH-5,bW-4,2);
+      }
+    }
+    // Mortar stain overlay
+    ctx.strokeStyle=`rgba(30,15,6,0.14)`;ctx.lineWidth=0.8;
+    for(let r=0;r<rows;r++){const ox=r%2===0?0:bW/2;for(let c2=0;c2<cols;c2++){ctx.strokeRect(c2*bW-ox+2,r*bH+3,bW-4,bH-5);}}
+  }));
   function brickMat(seed){
-    return new THREE.ShaderMaterial({side:THREE.DoubleSide,uniforms:{uS:{value:seed}},
-      vertexShader:`varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`,
-      fragmentShader:`uniform float uS;varying vec2 vUv;
-        float h(vec2 p){return fract(sin(dot(p+uS,vec2(127.1,311.7)))*43758.5);}
-        void main(){
-          vec2 bu=vUv*vec2(18.0,8.0);
-          float row=floor(bu.y);
-          vec2 bf=bu-vec2(row*0.5,0.0);bf.x=fract(bf.x);bf.y=fract(bu.y);
-          float mortar=max(smoothstep(0.055,0.015,bf.x),smoothstep(0.08,0.02,bf.y));
-          vec2 bi=floor(bu-vec2(row*0.5,0.0));
-          float rnd=h(bi);float rnd2=h(bi+0.7);
-          vec3 brick=vec3(0.58+rnd*0.10,0.34+rnd*0.06,0.18+rnd*0.04);
-          brick=mix(brick,vec3(0.45,0.28,0.15),rnd2*0.25);
-          brick=mix(brick,vec3(0.48,0.40,0.32),mortar*0.9);
-          gl_FragColor=vec4(brick,1.0);}` });
+    const t=_brickTexes[Math.abs(Math.round(seed))%_brickTexes.length].clone();
+    t.repeat.set(4,3);
+    return new THREE.MeshStandardMaterial({map:t,roughness:0.88,metalness:0.0,side:THREE.DoubleSide});
   }
 
+  // Canvas worn stone floor tiles
+  const _floorTile=mkTexT(1024,512,(ctx,W,H)=>{
+    ctx.fillStyle='#7a6a54';ctx.fillRect(0,0,W,H);
+    const cols=9,rows=5,tw=W/cols,th=H/rows;
+    for(let r=0;r<rows;r++) for(let c2=0;c2<cols;c2++){
+      const x=c2*tw,y=r*th,sd=r*11+c2*7;
+      const v=0.58+(Math.abs(Math.sin(sd*5.3)))*0.30;
+      ctx.fillStyle=`rgb(${Math.round(130*v)},${Math.round(112*v)},${Math.round(88*v)})`;
+      ctx.fillRect(x+2,y+2,tw-4,th-4);
+      // Wear: lighter center, darker edges
+      const grd=ctx.createRadialGradient(x+tw/2,y+th/2,0,x+tw/2,y+th/2,tw*0.6);
+      grd.addColorStop(0,`rgba(255,240,200,${0.04+(Math.abs(Math.sin(sd*2.1)))*0.06})`);
+      grd.addColorStop(1,'rgba(0,0,0,0)');
+      ctx.fillStyle=grd;ctx.fillRect(x+2,y+2,tw-4,th-4);
+    }
+    ctx.strokeStyle='rgba(25,15,8,0.50)';ctx.lineWidth=3;
+    for(let i=0;i<=cols;i++){ctx.beginPath();ctx.moveTo(i*tw,0);ctx.lineTo(i*tw,H);ctx.stroke();}
+    for(let i=0;i<=rows;i++){ctx.beginPath();ctx.moveTo(0,i*th);ctx.lineTo(W,i*th);ctx.stroke();}
+  });
+
   // Floor: worn stone tiles
-  const flMat2=new THREE.ShaderMaterial({side:THREE.FrontSide,
-    vertexShader:`varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`,
-    fragmentShader:`varying vec2 vUv;
-      float h(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5);}
-      void main(){
-        vec2 su=vUv*vec2(12.0,40.0);vec2 si=floor(su);vec2 sf=fract(su)-0.5;
-        float jt=max(smoothstep(0.04,0.008,abs(sf.x)),smoothstep(0.04,0.008,abs(sf.y)));
-        float rnd=h(si);
-        vec3 c=vec3(0.45+rnd*0.08,0.38+rnd*0.05,0.28+rnd*0.03);
-        c=mix(c,vec3(0.22,0.18,0.12),jt*0.55);
-        gl_FragColor=vec4(c,1.0);}`});
-  const fl3=new THREE.Mesh(new THREE.PlaneGeometry(14,60,1,1),flMat2);
+  const flT2=_floorTile.clone();flT2.repeat.set(3,8);
+  const fl3=new THREE.Mesh(new THREE.PlaneGeometry(14,60),
+    new THREE.MeshStandardMaterial({map:flT2,roughness:0.82,metalness:0.0}));
   fl3.rotation.x=-Math.PI/2;fl3.position.set(0,0,-18);scene.add(fl3);
 
   // Side walls with brick and arch indentations
@@ -3033,24 +3190,18 @@ locationBuilders['tabriz'] = function(scene, camera, controls) {
   vaultGeo.computeVertexNormals();
   const vaultMat=new THREE.ShaderMaterial({side:THREE.DoubleSide,uniforms:uni,
     vertexShader:`varying vec2 vUv;varying vec3 vN;void main(){vUv=uv;vN=normalMatrix*normal;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`,
-    fragmentShader:`uniform float uTime;varying vec2 vUv;varying vec3 vN;
-      float h(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5);}
+    fragmentShader:`uniform float uTime;uniform sampler2D uBrick;varying vec2 vUv;varying vec3 vN;
       void main(){
-        vec2 bu=vUv*vec2(10.0,36.0);
-        float row=floor(bu.y);
-        vec2 bf=bu-vec2(row*0.5,0.0);bf.x=fract(bf.x);bf.y=fract(bu.y);
-        float mortar=max(smoothstep(0.06,0.015,bf.x),smoothstep(0.08,0.018,bf.y));
-        vec2 bi=floor(bu-vec2(row*0.5,0.0));float rnd=h(bi);
-        vec3 brick=vec3(0.52+rnd*0.09,0.30+rnd*0.06,0.16+rnd*0.03);
-        brick=mix(brick,vec3(0.42,0.34,0.24),mortar*0.82);
+        vec4 brick=texture2D(uBrick,vUv*vec2(3.0,18.0));
         // Vault oculi light shafts
         float dz=fract(vUv.y*6.0)-0.5;float dx2=vUv.x-0.5;
         float oculus=smoothstep(0.08,0.04,length(vec2(dx2,dz)*vec2(1.0,0.6)));
         float lightAnim=0.6+0.4*sin(uTime*0.3);
-        brick=mix(brick,vec3(1.0,0.90,0.70)*lightAnim,oculus*0.7);
+        vec3 c=brick.rgb;c=mix(c,vec3(1.0,0.90,0.72)*lightAnim,oculus*0.75);
         float lt=dot(normalize(vN),normalize(vec3(0.0,-1.0,0.3)))*0.4+0.6;
-        brick*=lt*0.85;
-        gl_FragColor=vec4(brick,1.0);}` });
+        c*=lt*0.86;c*=0.72+smoothstep(0.0,0.5,abs(vUv.x-0.5))*0.28;
+        gl_FragColor=vec4(c,1.0);}`,
+    uniforms:{...uni,uBrick:{value:(()=>{const t=_brickTexes[0].clone();t.repeat.set(3,18);return t;})()}}});
   const vault=new THREE.Mesh(vaultGeo,vaultMat);
   vault.rotation.x=Math.PI/2;vault.position.set(0,5.5,-18);scene.add(vault);
 
