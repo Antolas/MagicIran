@@ -237,6 +237,82 @@
   }
   #loc-hint.visible { opacity: 1; }
 
+  /* ── Tour Guidato ────────────────────────────────────── */
+  #tour-start-btn {
+    position: fixed; bottom: 32px; right: 32px; z-index: 200;
+    padding: 14px 28px; border-radius: 30px;
+    background: linear-gradient(135deg, #f5af19 0%, #f12711 100%);
+    border: none; color: #fff; font-size: 0.88rem; font-weight: 600;
+    cursor: pointer; letter-spacing: 0.08em;
+    box-shadow: 0 8px 30px rgba(245,100,25,0.45);
+    transition: transform 0.2s, box-shadow 0.2s, opacity 0.3s;
+  }
+  #tour-start-btn:hover { transform: scale(1.06); box-shadow: 0 14px 42px rgba(245,100,25,0.55); }
+  #tour-start-btn.hidden { opacity: 0; pointer-events: none; }
+
+  #tour-card {
+    position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%);
+    z-index: 430; display: none;
+    background: rgba(8,5,18,0.92); backdrop-filter: blur(24px);
+    border-radius: 20px; border: 1px solid rgba(255,255,255,0.10);
+    padding: 22px 28px 18px; width: min(580px, 90vw);
+    box-shadow: 0 28px 80px rgba(0,0,0,0.65);
+  }
+  #tour-card.visible { display: block; }
+  #tour-card-label {
+    font-size: 0.66rem; letter-spacing: 0.2em; text-transform: uppercase;
+    color: #f5af19; margin-bottom: 6px; font-weight: 600;
+  }
+  #tour-card-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.22rem; font-weight: 700; margin-bottom: 10px;
+  }
+  #tour-card-text {
+    font-size: 0.82rem; line-height: 1.72;
+    color: rgba(255,255,255,0.72); min-height: 56px;
+  }
+  #tour-card-nav {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-top: 16px; gap: 8px;
+  }
+  .tour-nav-btn {
+    padding: 8px 20px; border-radius: 20px;
+    border: 1px solid rgba(255,255,255,0.18);
+    background: rgba(255,255,255,0.06); color: #fff;
+    font-size: 0.78rem; font-weight: 500; cursor: pointer;
+    transition: background 0.2s, border-color 0.2s;
+    white-space: nowrap;
+  }
+  .tour-nav-btn:hover { background: rgba(255,255,255,0.14); border-color: rgba(255,255,255,0.30); }
+  .tour-nav-btn:disabled { opacity: 0.30; cursor: default; pointer-events: none; }
+  .tour-nav-btn.exit {
+    background: rgba(241,39,17,0.10); border-color: rgba(241,39,17,0.25);
+    color: #ff7055;
+  }
+  .tour-nav-btn.exit:hover { background: rgba(241,39,17,0.22); }
+
+  #tour-progress-wrap {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 430;
+    height: 3px; display: none;
+    background: rgba(255,255,255,0.06);
+  }
+  #tour-progress-wrap.visible { display: block; }
+  #tour-progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, #f5af19, #f12711);
+    transition: width 0.6s ease; width: 0%;
+  }
+  #tour-counter {
+    position: fixed; top: 12px; left: 50%; transform: translateX(-50%);
+    z-index: 430; display: none;
+    font-size: 0.70rem; letter-spacing: 0.14em; text-transform: uppercase;
+    color: rgba(255,255,255,0.48);
+    background: rgba(0,0,0,0.48); backdrop-filter: blur(8px);
+    padding: 6px 18px; border-radius: 20px;
+    border: 1px solid rgba(255,255,255,0.08);
+  }
+  #tour-counter.visible { display: block; }
+
   /* Photo Strip */
   #photo-strip {
     display: none;
@@ -377,6 +453,21 @@
   <button id="lb-close-btn" aria-label="Chiudi">&#x2715;</button>
   <img id="lb-img" src="" alt="">
 </div>
+
+<button id="tour-start-btn">&#9654; Tour Guidato</button>
+
+<div id="tour-card">
+  <div id="tour-card-label"></div>
+  <div id="tour-card-title"></div>
+  <div id="tour-card-text"></div>
+  <div id="tour-card-nav">
+    <button class="tour-nav-btn" id="tour-prev-btn">&#8592; Precedente</button>
+    <button class="tour-nav-btn exit" id="tour-exit-btn">&#x2715; Esci dal tour</button>
+    <button class="tour-nav-btn" id="tour-next-btn">Avanti &#8594;</button>
+  </div>
+</div>
+<div id="tour-progress-wrap"><div id="tour-progress-bar"></div></div>
+<div id="tour-counter"></div>
 <div id="location-view">
   <div class="loc-view-bg" id="loc-bg"></div>
   <div class="loc-view-content">
@@ -1126,6 +1217,7 @@ function enterLocation(index) {
   if(appState!=='hub')return;
   appState='transitioning';
   hidePreview();
+  document.getElementById('tour-start-btn').classList.add('hidden');
   const loc=locations[index];
   const overlay=document.getElementById('transition-overlay');
   overlay.classList.add('active');
@@ -1231,6 +1323,7 @@ function startImmersiveLocation(loc, builder) {
     const dt = locClock.getElapsedTime();
     locControls.update();
     if(locCleanup && locCleanup.update) locCleanup.update(dt);
+    if(window._tourUpdate) window._tourUpdate(dt);
     locRenderer.render(locScene, locCamera);
   }
   locAnimate();
@@ -1275,6 +1368,7 @@ window.exitLocation=function(){
     document.getElementById('hub-title').style.opacity='1';
     document.getElementById('labels-container').style.opacity='1';
     document.getElementById('compass').style.opacity='1';
+    if (!TourController.active) document.getElementById('tour-start-btn').classList.remove('hidden');
     appState='hub';
     setTimeout(()=>overlay.classList.remove('active'),100);
   },600);
@@ -1294,7 +1388,12 @@ window.closeLightbox = function(e) {
   lb.addEventListener('click', window.closeLightbox);
   document.getElementById('lb-close-btn').addEventListener('click', window.closeLightbox);
   document.addEventListener('keydown', e => {
-    if (e.key === 'Escape') window.closeLightbox();
+    if (e.key === 'Escape') {
+      if (TourController && TourController.active) TourController.exit();
+      else window.closeLightbox();
+    }
+    if (e.key === 'ArrowRight' && TourController && TourController.active) TourController.next();
+    if (e.key === 'ArrowLeft'  && TourController && TourController.active) TourController.prev();
   });
 })();
 
@@ -3481,6 +3580,271 @@ function updateGeoLabels() {
     el.style.transform = 'translate(-50%, -50%)';
   });
 }
+
+// ============================================================
+//  TOUR GUIDATO — script narrativo + controller
+// ============================================================
+const tourScript = [
+  { id: 'persepolis', steps: [
+    { cam:[0,3.5,18], target:[0,4,0],
+      label:'Persepolis · Tappa 1 di 3', title:'La Città dei Persiani',
+      text:'Fondata da Dario il Grande nel 518 a.C., Persepolis era il cuore cerimoniale dell\'Impero Achemenide — il più grande del mondo antico. Ogni pietra porta incisi i nomi di trenta nazioni conquistate.' },
+    { cam:[10,6,5], target:[0,5,0],
+      label:'Persepolis · Tappa 2 di 3', title:'Le Cento Colonne',
+      text:'Il palazzo delle Cento Colonne poteva ospitare diecimila persone. Le colonne alte 20 metri sostenevano un tetto di cedro del Libano. Alessandro Magno lo incendiò nel 330 a.C. come atto simbolico di vendetta.' },
+    { cam:[-8,10,8], target:[0,4,0],
+      label:'Persepolis · Tappa 3 di 3', title:'Il Portale delle Nazioni',
+      text:'Nel grande rilievo dell\'Apadana, delegazioni di 23 nazioni portano tributi al Re dei Re. È il più antico ritratto della "diversità delle genti" mai scolpito nella pietra.' },
+  ]},
+  { id: 'nasir-al-mulk', steps: [
+    { cam:[0,1.9,6], target:[0,3.2,-4],
+      label:'Nasir al-Mulk · Tappa 1 di 3', title:'La Moschea Rosa',
+      text:'Costruita tra il 1876 e il 1888 durante la dinastia Qajar, la Moschea Nasir al-Mulk è famosa per le sue straordinarie vetrate policrome che all\'alba trasformano la sala in un caleidoscopio di luce vivente.' },
+    { cam:[-3,3,-2], target:[-7,4,-8],
+      label:'Nasir al-Mulk · Tappa 2 di 3', title:'Danza di Luce',
+      text:'Le vetrate proiettano sul tappeto persiano un arcobaleno che si sposta con il sole. Rosa, azzurro e oro avvolgono i fedeli in preghiera in un abbraccio di colori che non si ripete mai uguale.' },
+    { cam:[3,6,1], target:[0,8,-5],
+      label:'Nasir al-Mulk · Tappa 3 di 3', title:'Il Soffitto dei Sogni',
+      text:'Il soffitto a volta, decorato con stelle a otto punte e arabeschi geometrici in stucco dorato, rappresenta il tentativo umano di raffigurare l\'infinita perfezione dell\'universo divino.' },
+  ]},
+  { id: 'naqsh-e-jahan', steps: [
+    { cam:[0,5,42], target:[0,6,0],
+      label:'Naqsh-e Jahan · Tappa 1 di 3', title:'Immagine del Mondo',
+      text:'"Immagine del Mondo" — con i suoi 510×165 metri è la seconda piazza più grande sulla Terra. Shah Abbas I la costruì nel 1598 come centro assoluto dell\'universo safavide.' },
+    { cam:[25,8,10], target:[0,6,0],
+      label:'Naqsh-e Jahan · Tappa 2 di 3', title:'Ali Qapu — Il Trono del Re',
+      text:'Dal palazzo Ali Qapu, lo Shah osservava partite di polo sulla piazza. L\'edificio a sei piani nasconde una stanza della musica con soffitti forati appositamente progettati per un\'acustica perfetta.' },
+    { cam:[-20,12,5], target:[0,5,0],
+      label:'Naqsh-e Jahan · Tappa 3 di 3', title:'La Moschea dell\'Imam',
+      text:'La Moschea dell\'Imam fu costruita in 18 anni. Il suo architetto risolse l\'orientamento verso la Mecca — ruotato di 45° rispetto alla piazza — con un corridoio curvo di straordinaria eleganza geometrica.' },
+  ]},
+  { id: 'golestan', steps: [
+    { cam:[0,2.8,8], target:[0,3.5,-2],
+      label:'Golestan · Tappa 1 di 3', title:'Palazzo di Rose',
+      text:'"Palazzo delle Rose": dimora reale per cinque secoli, testimoniò l\'incoronazione di ogni Shah d\'Iran dall\'era Safavide fino ai Pahlavi. Patrimonio UNESCO dal 2013.' },
+    { cam:[-5,3,1], target:[5,3.5,-3],
+      label:'Golestan · Tappa 2 di 3', title:'Sala degli Specchi',
+      text:'Il Talar-e Aineh è interamente ricoperto da tessere di specchio molato a mano. Quando le candele erano accese, la sala diventava una galassia di luce — i diplomatici europei rimanevano senza parole.' },
+    { cam:[0,6,2], target:[0,3,-4],
+      label:'Golestan · Tappa 3 di 3', title:'Arte Qajar',
+      text:'Le pitture e i rilievi di Golestan mescolano l\'arte persiana classica con elementi europei del XIX secolo: un incontro unico tra Oriente e Occidente, congelato nella pietra e nell\'oro.' },
+  ]},
+  { id: 'tabriz', steps: [
+    { cam:[0,2.2,10], target:[0,3.5,-8],
+      label:'Tabriz · Tappa 1 di 3', title:'Il Bazar dei Bazar',
+      text:'Il Grande Bazar di Tabriz, patrimonio UNESCO, è il bazar coperto più grande del mondo: 7 km² di corridoi, oltre 4.000 botteghe. Fu centro della Via della Seta per seimila anni.' },
+    { cam:[6,3,0], target:[0,3.5,-8],
+      label:'Tabriz · Tappa 2 di 3', title:'I Mestieri dell\'Oriente',
+      text:'Ogni sezione del bazar è specializzata in un mestiere: gioiellieri, tessitori, speziali, bottai. I tappeti di Tabriz sono considerati tra i più pregiati al mondo, con nodi che raggiungono 100 per cm².' },
+    { cam:[0,5,-2], target:[0,3,-12],
+      label:'Tabriz · Tappa 3 di 3', title:'Volte di Mattone',
+      text:'Le volte a crociera di mattone del XV secolo, costruite senza cemento, hanno resistito a terremoti e invasioni per sei secoli. La loro geometria strutturale è ancora studiata dagli ingegneri moderni.' },
+  ]},
+  { id: 'badab-e-surt', steps: [
+    { cam:[0,8,22], target:[0,4,0],
+      label:'Badab-e Surt · Tappa 1 di 3', title:'Terrazze del Tempo',
+      text:'Le terrazze travertine di Badab-e Surt si sono formate in 12.000 anni, quando sorgenti termali ricche di carbonato di calcio hanno depositato strato su strato di minerali colorati.' },
+    { cam:[15,5,8], target:[0,3,0],
+      label:'Badab-e Surt · Tappa 2 di 3', title:'Le Vasche Arancioni',
+      text:'I colori — dal crema al rosso ruggine — dipendono dalla concentrazione di ferro. Le vasche più calde producono l\'arancione intenso; quelle fredde il bianco latteo. Ogni vasca ha un ecosistema microbico unico.' },
+    { cam:[0,16,8], target:[0,2,0],
+      label:'Badab-e Surt · Tappa 3 di 3', title:'Vista Aliena',
+      text:'Dall\'alto, le terrazze ricordano la superficie di un altro pianeta. Le agenzie spaziali usano formazioni simili per addestrare i geologi prima delle missioni su Marte.' },
+  ]},
+  { id: 'yazd', steps: [
+    { cam:[0,2.2,0], target:[0,2.5,-8],
+      label:'Yazd · Tappa 1 di 3', title:'Città del Vento',
+      text:'Yazd, abitata da almeno 7.000 anni, è la città in adobe più antica del mondo ancora viva. I suoi vicoli stretti, le torri del vento e i giardini nascosti sfidano il tempo e il deserto circostante.' },
+    { cam:[4,5,-3], target:[0,3,-8],
+      label:'Yazd · Tappa 2 di 3', title:'I Badgir — Catturatori di Vento',
+      text:'I badgir sono il primo sistema di aria condizionata naturale della storia: catturano il vento d\'altitudine, lo incanalano verso pozze d\'acqua sotterranee e rinfrescano l\'interno — tutto senza un watt di elettricità.' },
+    { cam:[-5,4,-5], target:[2,2.5,-10],
+      label:'Yazd · Tappa 3 di 3', title:'Fuoco Eterno Zoroastriano',
+      text:'A Yazd arde un fuoco sacro che, secondo la tradizione, non si spegne da 1.500 anni. I Magi che guidarono i Re Magi alla natività erano sacerdoti zoroastriani — la religione che nacque qui.' },
+  ]},
+  { id: 'dasht-e-lut', steps: [
+    { cam:[0,3.5,20], target:[0,4,0],
+      label:'Dasht-e Lut · Tappa 1 di 3', title:'Il Luogo Vuoto',
+      text:'"Lut" in persiano significa "vuoto". Il Dasht-e Lut è il deserto più caldo della Terra: nel 2005 i satelliti NASA registrarono +70,7°C sulla superficie — il record mondiale assoluto.' },
+    { cam:[18,6,8], target:[0,4,0],
+      label:'Dasht-e Lut · Tappa 2 di 3', title:'I Kalut — Città di Pietra',
+      text:'I Kalut sono formazioni rocciose alte fino a 70 metri, scolpite dal vento in milioni di anni. Vista dall\'alto, sembrano una metropoli fantasma con strade, torri e palazzi naturali.' },
+    { cam:[0,14,10], target:[0,3,0],
+      label:'Dasht-e Lut · Tappa 3 di 3', title:'Confine della Vita',
+      text:'Il centro del Dasht-e Lut è così caldo e secco che non vi sopravvive nessun organismo — nemmeno i batteri. È uno dei rari luoghi biologicamente sterili sulla Terra. Eppure, ai suoi margini, la vita fiorisce.' },
+  ]},
+];
+
+const TourController = {
+  active: false,
+  locIdx: 0,
+  stepIdx: 0,
+  _camFrom: new THREE.Vector3(),
+  _camTo:   new THREE.Vector3(),
+  _tgtFrom: new THREE.Vector3(),
+  _tgtTo:   new THREE.Vector3(),
+  _animStartT: -1,
+  _animDur: 2.2,
+  _typeTimer: null,
+
+  start() {
+    this.active = true;
+    this.locIdx = 0;
+    this.stepIdx = 0;
+    this._loadLocation();
+  },
+
+  _loadLocation() {
+    const entry = tourScript[this.locIdx];
+    const locData = locations.find(l => l.id === entry.id);
+    if (!locData) return;
+    const builder = locationBuilders[entry.id];
+    if (!builder) return;
+
+    if (appState === 'location') {
+      // Transition between immersive locations
+      const overlay = document.getElementById('transition-overlay');
+      overlay.classList.add('active');
+      setTimeout(() => {
+        if (locAnimId) { cancelAnimationFrame(locAnimId); locAnimId = null; }
+        if (locCleanup) {
+          if (locCleanup._onResize) window.removeEventListener('resize', locCleanup._onResize);
+          if (locCleanup.dispose) locCleanup.dispose();
+          locCleanup = null;
+        }
+        if (locRenderer) { locRenderer.domElement.remove(); locRenderer.dispose(); locRenderer = null; }
+        locScene = null; locCamera = null; locControls = null;
+        startImmersiveLocation(locData, builder);
+        setTimeout(() => {
+          overlay.classList.remove('active');
+          this._showStep();
+        }, 250);
+      }, 480);
+    } else {
+      // From hub: use normal enterLocation flow
+      enterLocation(locations.findIndex(l => l.id === entry.id));
+      setTimeout(() => this._showStep(), 900);
+    }
+  },
+
+  _showStep() {
+    const entry = tourScript[this.locIdx];
+    const step = entry.steps[this.stepIdx];
+    if (!step || !locCamera || !locControls) return;
+
+    // Card
+    document.getElementById('tour-card-label').textContent = step.label;
+    document.getElementById('tour-card-title').textContent = step.title;
+    const textEl = document.getElementById('tour-card-text');
+    textEl.textContent = '';
+    clearTimeout(this._typeTimer);
+    this._typewriter(textEl, step.text);
+
+    // Camera lerp setup
+    this._camFrom.copy(locCamera.position);
+    this._tgtFrom.copy(locControls.target);
+    this._camTo.set(...step.cam);
+    this._tgtTo.set(...step.target);
+    this._animStartT = -1;
+
+    // Disable user orbit during flight
+    locControls.enabled = false;
+    locControls.autoRotate = false;
+    setTimeout(() => {
+      if (locControls) { locControls.enabled = true; locControls.autoRotate = true; }
+    }, (this._animDur + 0.3) * 1000);
+
+    // Progress
+    const totalSteps = tourScript.reduce((s, e) => s + e.steps.length, 0);
+    const doneSteps  = tourScript.slice(0, this.locIdx).reduce((s, e) => s + e.steps.length, 0) + this.stepIdx;
+    document.getElementById('tour-progress-bar').style.width = ((doneSteps + 1) / totalSteps * 100) + '%';
+
+    const locName = tourScript[this.locIdx].id.replace(/-/g, ' ')
+      .replace(/\b\w/g, c => c.toUpperCase());
+    document.getElementById('tour-counter').textContent =
+      `${locName}  ·  step ${this.stepIdx + 1}/${entry.steps.length}  ·  luogo ${this.locIdx + 1}/8`;
+
+    const isLast = this.locIdx === tourScript.length - 1 &&
+                   this.stepIdx === entry.steps.length - 1;
+    document.getElementById('tour-next-btn').textContent = isLast ? 'Fine tour ✓' : 'Avanti →';
+    document.getElementById('tour-prev-btn').disabled =
+      (this.locIdx === 0 && this.stepIdx === 0);
+  },
+
+  _typewriter(el, text, idx = 0) {
+    if (idx >= text.length) return;
+    el.textContent += text[idx];
+    this._typeTimer = setTimeout(() => this._typewriter(el, text, idx + 1), 16);
+  },
+
+  next() {
+    clearTimeout(this._typeTimer);
+    const entry = tourScript[this.locIdx];
+    if (this.stepIdx < entry.steps.length - 1) {
+      this.stepIdx++;
+      this._showStep();
+    } else if (this.locIdx < tourScript.length - 1) {
+      this.locIdx++;
+      this.stepIdx = 0;
+      this._loadLocation();
+    } else {
+      this.exit();
+    }
+  },
+
+  prev() {
+    clearTimeout(this._typeTimer);
+    if (this.stepIdx > 0) {
+      this.stepIdx--;
+      this._showStep();
+    } else if (this.locIdx > 0) {
+      this.locIdx--;
+      this.stepIdx = tourScript[this.locIdx].steps.length - 1;
+      this._loadLocation();
+    }
+  },
+
+  exit() {
+    this.active = false;
+    clearTimeout(this._typeTimer);
+    document.getElementById('tour-card').classList.remove('visible');
+    document.getElementById('tour-progress-wrap').classList.remove('visible');
+    document.getElementById('tour-counter').classList.remove('visible');
+    document.getElementById('tour-progress-bar').style.width = '0%';
+    if (locControls) { locControls.enabled = true; locControls.autoRotate = true; }
+    window.exitLocation();
+  },
+
+  update(t) {
+    if (!this.active || !locCamera || !locControls) return;
+    if (this._animStartT < 0) this._animStartT = t;
+    const elapsed = t - this._animStartT;
+    if (elapsed < this._animDur) {
+      const p = this._ease(elapsed / this._animDur);
+      locCamera.position.lerpVectors(this._camFrom, this._camTo, p);
+      locControls.target.lerpVectors(this._tgtFrom, this._tgtTo, p);
+    }
+  },
+
+  _ease(t) { return t < 0.5 ? 2*t*t : -1+(4-2*t)*t; }
+};
+
+// Wire buttons
+document.getElementById('tour-start-btn').addEventListener('click', () => {
+  document.getElementById('tour-start-btn').classList.add('hidden');
+  document.getElementById('tour-card').classList.add('visible');
+  document.getElementById('tour-progress-wrap').classList.add('visible');
+  document.getElementById('tour-counter').classList.add('visible');
+  TourController.start();
+});
+document.getElementById('tour-next-btn').addEventListener('click', () => TourController.next());
+document.getElementById('tour-prev-btn').addEventListener('click', () => TourController.prev());
+document.getElementById('tour-exit-btn').addEventListener('click', () => {
+  TourController.exit();
+  document.getElementById('tour-start-btn').classList.remove('hidden');
+});
+
+window._tourUpdate = t => TourController.update(t);
 
 init();
 </script>
