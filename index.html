@@ -290,8 +290,17 @@
     color: #ff7055;
   }
   .tour-nav-btn.exit:hover { background: rgba(241,39,17,0.22); }
-
-  #tour-progress-wrap {
+  #tour-voice-btn {
+    position: absolute; top: 14px; right: 18px;
+    width: 32px; height: 32px; border-radius: 50%;
+    background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.14);
+    color: rgba(255,255,255,0.7); font-size: 1rem; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: background 0.2s;
+  }
+  #tour-voice-btn:hover { background: rgba(255,255,255,0.16); }
+  #tour-voice-btn.muted { color: rgba(255,255,255,0.25); }
+  #tour-card { position: relative; }
     position: fixed; top: 0; left: 0; right: 0; z-index: 430;
     height: 3px; display: none;
     background: rgba(255,255,255,0.06);
@@ -457,6 +466,7 @@
 <button id="tour-start-btn">&#9654; Tour Guidato</button>
 
 <div id="tour-card">
+  <button id="tour-voice-btn" title="Attiva/disattiva voce narrante">🔊</button>
   <div id="tour-card-label"></div>
   <div id="tour-card-title"></div>
   <div id="tour-card-text"></div>
@@ -3686,6 +3696,7 @@ const TourController = {
   _animStartT: -1,
   _animDur: 2.2,
   _typeTimer: null,
+  _voiceOn: true,
 
   start() {
     this.active = true;
@@ -3739,6 +3750,7 @@ const TourController = {
     textEl.textContent = '';
     clearTimeout(this._typeTimer);
     this._typewriter(textEl, step.text);
+    this._speak(step.title + '. ' + step.text);
 
     // Camera lerp setup
     this._camFrom.copy(locCamera.position);
@@ -3777,9 +3789,26 @@ const TourController = {
     this._typeTimer = setTimeout(() => this._typewriter(el, text, idx + 1), 16);
   },
 
-  next() {
+  _speak(text) {
+    if (!this._voiceOn || !window.speechSynthesis) return;
+    window.speechSynthesis.cancel();
+    const utt = new SpeechSynthesisUtterance(text);
+    utt.lang = 'it-IT';
+    utt.rate = 0.92;
+    utt.pitch = 1.0;
+    // Prefer a higher-quality Italian voice if available
+    const voices = window.speechSynthesis.getVoices();
+    const itVoice = voices.find(v => v.lang.startsWith('it') && v.localService)
+                 || voices.find(v => v.lang.startsWith('it'));
+    if (itVoice) utt.voice = itVoice;
+    window.speechSynthesis.speak(utt);
+  },
+
+  _stopSpeech() {
+    if (window.speechSynthesis) window.speechSynthesis.cancel();
+  },
     clearTimeout(this._typeTimer);
-    const entry = tourScript[this.locIdx];
+    this._stopSpeech();
     if (this.stepIdx < entry.steps.length - 1) {
       this.stepIdx++;
       this._showStep();
@@ -3794,7 +3823,7 @@ const TourController = {
 
   prev() {
     clearTimeout(this._typeTimer);
-    if (this.stepIdx > 0) {
+    this._stopSpeech();
       this.stepIdx--;
       this._showStep();
     } else if (this.locIdx > 0) {
@@ -3807,7 +3836,7 @@ const TourController = {
   exit() {
     this.active = false;
     clearTimeout(this._typeTimer);
-    document.getElementById('tour-card').classList.remove('visible');
+    this._stopSpeech();
     document.getElementById('tour-progress-wrap').classList.remove('visible');
     document.getElementById('tour-counter').classList.remove('visible');
     document.getElementById('tour-progress-bar').style.width = '0%';
@@ -3843,6 +3872,21 @@ document.getElementById('tour-exit-btn').addEventListener('click', () => {
   TourController.exit();
   document.getElementById('tour-start-btn').classList.remove('hidden');
 });
+
+// Bottone voce narrante
+(function() {
+  const btn = document.getElementById('tour-voice-btn');
+  // Carica voci appena disponibili (Chrome le carica in modo asincrono)
+  if (window.speechSynthesis && window.speechSynthesis.onvoiceschanged !== undefined) {
+    window.speechSynthesis.onvoiceschanged = () => { window.speechSynthesis.getVoices(); };
+  }
+  btn.addEventListener('click', () => {
+    TourController._voiceOn = !TourController._voiceOn;
+    btn.textContent = TourController._voiceOn ? '🔊' : '🔇';
+    btn.classList.toggle('muted', !TourController._voiceOn);
+    if (!TourController._voiceOn) TourController._stopSpeech();
+  });
+})();
 
 window._tourUpdate = t => TourController.update(t);
 
