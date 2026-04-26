@@ -1201,72 +1201,142 @@ const locationBuilders = {};
 //  NASIR AL-MULK MOSQUE — Immersive 3D
 // ============================================================
 locationBuilders['nasir-al-mulk'] = function(scene, camera, controls) {
-  // Camera: inside the main hall, looking toward the stained glass wall
-  camera.position.set(0, 2.2, 4);
-  controls.target.set(0, 3.0, -6);
+  // Camera: low, looking along the hall toward the stained glass wall
+  camera.position.set(0, 1.9, 6);
+  controls.target.set(0, 3.2, -4);
   controls.minDistance = 0.3;
-  controls.maxDistance = 14;
-  controls.maxPolarAngle = Math.PI * 0.80;
-  controls.minPolarAngle = Math.PI * 0.08;
-  controls.autoRotateSpeed = 0.12;
+  controls.maxDistance = 16;
+  controls.maxPolarAngle = Math.PI * 0.82;
+  controls.minPolarAngle = Math.PI * 0.06;
+  controls.autoRotateSpeed = 0.10;
 
-  // Warm ambient haze (morning golden light)
-  scene.fog = new THREE.FogExp2(0x3d1508, 0.010);
-  const ambient = new THREE.AmbientLight(0x7a3c18, 0.85);
-  scene.add(ambient);
+  // ── TONE‑MAPPING: make it look photographic ──────────────────────────
+  if(locRenderer){
+    locRenderer.toneMapping = THREE.ACESFilmicToneMapping;
+    locRenderer.toneMappingExposure = 1.15;
+    locRenderer.outputColorSpace = THREE.SRGBColorSpace;
+  }
 
-  // Warm overhead lights (chandeliers)
-  const chandA = new THREE.PointLight(0xffb060, 3.0, 22, 1.4);
-  chandA.position.set(0, 8.5, 0); scene.add(chandA);
-  const chandB = new THREE.PointLight(0xffa050, 2.5, 20, 1.4);
-  chandB.position.set(0, 8.5, -12); scene.add(chandB);
+  // ── LIGHTING ──────────────────────────────────────────────────────────
+  // Deep burgundy ambient (interior with stained glass morning light)
+  scene.add(new THREE.AmbientLight(0x6a3015, 1.1));
+
+  // Main directional (morning light from window side)
+  const sunFill = new THREE.DirectionalLight(0xffd080, 1.4);
+  sunFill.position.set(-10, 10, 0);
+  scene.add(sunFill);
+
+  // Warm hemisphere: warm top, cool dark floor bounce
+  scene.add(new THREE.HemisphereLight(0xc87040, 0x1a0808, 0.6));
+
+  // Chandelier point lights
+  [[-4.6,0,8.2], [4.6,-12,8.2], [0,-6,8.8]].forEach(([x,z,y]) => {
+    const l = new THREE.PointLight(0xffcc77, 2.2, 20, 1.5);
+    l.position.set(x, y, z); scene.add(l);
+  });
+
+  // ── TEXTURE LOADER ────────────────────────────────────────────────────
+  const TL = new THREE.TextureLoader();
+  // We use Special:FilePath redirects → direct JPEG served by Wikimedia CDN
+  const TEX = {
+    ceiling : 'https://upload.wikimedia.org/wikipedia/commons/thumb/3/35/Nasir-ol-Molk_Mosque_%28inside%29.jpg/1024px-Nasir-ol-Molk_Mosque_%28inside%29.jpg',
+    window  : 'https://upload.wikimedia.org/wikipedia/commons/thumb/7/79/Exquisite_Pink_Mosque.jpg/640px-Exquisite_Pink_Mosque.jpg',
+    carpet  : 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/a4/Nasir_al_molk_03.jpg/640px-Nasir_al_molk_03.jpg',
+    column  : 'https://upload.wikimedia.org/wikipedia/commons/thumb/7/75/Nasir-ol-Molk_Mosque_%28inside%29.jpg/480px-Nasir-ol-Molk_Mosque_%28inside%29.jpg',
+    tiles   : 'https://upload.wikimedia.org/wikipedia/commons/thumb/b/b3/Colors_Streaming%2C_Winter_Prayer_Hall%2C_Nasir-Ol-Molk_Mosque%2C_Shiraz%2C_Iran_%2851178220237%29.jpg/640px-Colors_Streaming%2C_Winter_Prayer_Hall%2C_Nasir-Ol-Molk_Mosque%2C_Shiraz%2C_Iran_%2851178220237%29.jpg',
+  };
 
   const globalUni = { uTime: { value: 0 } };
   const animMats = [];
+  const windowAnimMats = [];
 
-  // ─── FLOOR: deep red Persian carpet + reflective marble near windows ────
-  const floorGeo = new THREE.PlaneGeometry(16, 36, 80, 80);
+  // ── PANORAMIC BACKGROUND (fisheye interior photo as env sphere) ───────
+  TL.crossOrigin = 'anonymous';
+  TL.load(TEX.ceiling, (bgTex) => {
+    bgTex.colorSpace = THREE.SRGBColorSpace;
+    bgTex.mapping = THREE.EquirectangularReflectionMapping;
+    // Use as skybox-sphere for immersive background feel
+    const bgGeo = new THREE.SphereGeometry(50, 64, 32);
+    const bgMat = new THREE.MeshBasicMaterial({
+      map: bgTex, side: THREE.BackSide,
+      transparent: true, opacity: 0.32
+    });
+    scene.add(new THREE.Mesh(bgGeo, bgMat));
+  });
+
+  // ── FLOOR: photorealistic carpet + reflective dark marble near windows ─
+  const floorGeo = new THREE.PlaneGeometry(15, 34, 1, 1);
+  const floorUni = { ...globalUni, uTime: globalUni.uTime };
   const floorMat = new THREE.ShaderMaterial({
     side: THREE.FrontSide, uniforms: globalUni,
-    vertexShader:`varying vec2 vUv; varying vec3 vWP;
-      void main(){vUv=uv; vWP=(modelMatrix*vec4(position,1.0)).xyz;
-        gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`,
-    fragmentShader:`uniform float uTime; varying vec2 vUv; varying vec3 vWP;
+    vertexShader: `
+      varying vec2 vUv; varying vec3 vWP;
       void main(){
-        // x: 0=right(+7), 1=left(−7); y: 0=back, 1=front
-        float nearWindow=smoothstep(0.25,0.0,vUv.x); // marble strip near left wall
-        // Marble
-        float n=sin(vUv.x*9.0+vUv.y*5.0+uTime*0.08)*0.5+0.5;
-        n+=sin(vUv.x*15.0-vUv.y*7.0)*0.25;
-        vec3 marble=mix(vec3(0.06,0.06,0.10),vec3(0.16,0.15,0.22),n);
-        // Animated color reflections on marble from windows
-        float wY=vUv.y;
-        vec3 refLight=vec3(
-          0.7*abs(sin(wY*9.4+uTime*0.3)),
-          0.5*abs(sin(wY*7.1+uTime*0.22+2.0)),
-          0.9*abs(sin(wY*5.8-uTime*0.18+4.0))
-        )*nearWindow*0.6;
-        marble+=refLight;
-        // Carpet geometric pattern
-        vec2 cu=vUv*vec2(7.0,18.0); vec2 cf=fract(cu)-0.5;
-        float diamond=abs(cf.x)+abs(cf.y);
-        float pat1=smoothstep(0.34,0.30,diamond)-smoothstep(0.22,0.18,diamond);
-        float cross=smoothstep(0.055,0.025,min(abs(cf.x),abs(cf.y)));
-        float prayLine=smoothstep(0.02,0.0,abs(fract(vUv.y*13.0)-0.5)-0.44);
+        vUv=uv;
+        vWP=(modelMatrix*vec4(position,1.0)).xyz;
+        gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);
+      }`,
+    fragmentShader: `
+      uniform float uTime; varying vec2 vUv; varying vec3 vWP;
+      // --- simple hash ---
+      float h(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.547);}
+      float n(vec2 p){vec2 i=floor(p),f=fract(p); f=f*f*(3.0-2.0*f);
+        return mix(mix(h(i),h(i+vec2(1,0)),f.x),mix(h(i+vec2(0,1)),h(i+vec2(1,1)),f.x),f.y);}
+      void main(){
+        // Left strip (x < 0.12) = dark reflective marble under windows
+        float marble=smoothstep(0.14,0.06,vUv.x);
+        // Marble veins
+        float vein=n(vUv*vec2(4.0,22.0)+uTime*0.04)*0.6+n(vUv*vec2(8.0,45.0))*0.4;
+        vec3 mDark=vec3(0.055,0.050,0.075);
+        vec3 mVein=vec3(0.14,0.12,0.18);
+        vec3 marbleCol=mix(mDark,mVein,smoothstep(0.38,0.62,vein));
+        // Animated stained‑glass color reflections on marble
+        vec3 ref=vec3(
+          abs(sin(vUv.y*8.3+uTime*0.35))*0.55,
+          abs(sin(vUv.y*6.1+uTime*0.22+1.5))*0.38,
+          abs(sin(vUv.y*9.7-uTime*0.28+3.0))*0.70
+        )*marble*0.65;
+        marbleCol=clamp(marbleCol+ref,0.0,1.0);
+        // Specular gloss on marble
+        float spec=pow(max(0.0,1.0-abs(vUv.x*2.0-0.12)*8.0),3.0)*marble*0.35;
+        marbleCol+=spec;
+
+        // ── PERSIAN CARPET ──
+        vec2 cu=vUv*vec2(9.0,20.0);
+        vec2 ci=floor(cu); vec2 cf=fract(cu)-0.5;
+        // Main diamond grid
+        float diam=abs(cf.x)+abs(cf.y);
+        float cell=smoothstep(0.34,0.30,diam)-smoothstep(0.20,0.16,diam);
+        float cross2=smoothstep(0.048,0.018,min(abs(cf.x),abs(cf.y)));
+        // Sub-pattern per tile
+        float ph=h(ci);
+        // arabesques
+        float ang2=atan(cf.y,cf.x); float r2=length(cf);
+        float petal=abs(sin(ang2*6.0))*smoothstep(0.30,0.10,r2)*0.4;
+        float spk=smoothstep(0.02,0.0,abs(sin(ang2*6.0))*r2)*0.35;
+        // Colors
+        vec3 crim=vec3(0.54,0.05,0.08); vec3 dred=vec3(0.34,0.02,0.04);
+        vec3 navy=vec3(0.06,0.08,0.30); vec3 gld=vec3(0.72,0.52,0.08);
+        vec3 ivr=vec3(0.88,0.82,0.65); vec3 teal=vec3(0.06,0.32,0.36);
+        vec3 c=dred;
+        c=mix(c,crim,cell*0.9);
+        c+=gld*cross2*0.6+navy*petal*0.7;
+        c=mix(c,ph<0.3?teal:navy,spk*(ph<0.3?0.4:0.3));
+        // Border bands
         float bx=smoothstep(0.0,0.055,min(vUv.x,1.0-vUv.x));
-        float by=smoothstep(0.0,0.04,min(vUv.y,1.0-vUv.y));
+        float by=smoothstep(0.0,0.035,min(vUv.y,1.0-vUv.y));
         float border=1.0-bx*by;
         float inner=1.0-smoothstep(0.055,0.09,min(min(vUv.x,1.0-vUv.x),min(vUv.y,1.0-vUv.y)));
-        vec3 crim=vec3(0.58,0.06,0.09); vec3 dred=vec3(0.38,0.03,0.05);
-        vec3 navy=vec3(0.07,0.09,0.32); vec3 gld=vec3(0.75,0.55,0.10);
-        vec3 ivr=vec3(0.86,0.79,0.62);
-        vec3 carpet=dred;
-        carpet=mix(carpet,crim,0.5+pat1*0.5);
-        carpet+=gld*cross*0.55; carpet+=navy*pat1*0.25;
-        carpet=mix(carpet,gld*0.85,border*0.55);
-        carpet=mix(carpet,ivr*0.7,prayLine*0.18);
-        carpet*=0.65+0.35*smoothstep(0.0,0.4,min(vUv.x,1.0-vUv.x));
-        vec3 col=mix(carpet,marble,nearWindow*0.85);
+        c=mix(c,gld*0.80,border*0.52);
+        c=mix(c,ivr*0.55,inner*0.22);
+        // Prayer row lines
+        float pray=smoothstep(0.018,0.0,abs(fract(vUv.y*12.0)-0.5)-0.46);
+        c=mix(c,gld*0.65,pray*0.25);
+        // Lighting: darker near exit, brighter near windows
+        float lx=0.62+0.38*smoothstep(0.0,0.35,min(vUv.x,1.0-vUv.x));
+        c*=lx;
+
+        vec3 col=mix(c,marbleCol,marble);
         gl_FragColor=vec4(col,1.0);
       }`
   });
@@ -1275,324 +1345,463 @@ locationBuilders['nasir-al-mulk'] = function(scene, camera, controls) {
   floorMesh.position.set(0, 0, -8);
   scene.add(floorMesh); animMats.push(floorMat);
 
-  // ─── COLUMNS: 3×2 rows, rose stone with spiral grooves ─────────────────
-  const colPositions = [];
-  [-1,1].forEach(side=>{[-8,-3,2].forEach(z=>colPositions.push({x:side*4.5,z}))});
-  colPositions.forEach(pos=>{
-    const g=new THREE.Group();
-    // Shaft
-    const shaft=new THREE.Mesh(new THREE.CylinderGeometry(0.23,0.28,7,24),
-      new THREE.ShaderMaterial({
-        vertexShader:`varying vec2 vUv; varying vec3 vN;
-          void main(){vUv=uv;vN=normalMatrix*normal;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`,
-        fragmentShader:`varying vec2 vUv; varying vec3 vN;
-          void main(){
-            float spiral=sin(vUv.y*22.0+vUv.x*6.283*4.5)*0.5+0.5;
-            float fine=sin(vUv.y*70.0)*0.4+0.5;
-            vec3 rL=vec3(0.86,0.68,0.60); vec3 rD=vec3(0.66,0.46,0.40);
-            vec3 cr=vec3(0.90,0.82,0.72);
-            vec3 c=mix(rD,rL,spiral); c=mix(c,cr,fine*0.22);
-            float groove=smoothstep(0.42,0.50,spiral);
-            c*=0.60+groove*0.42;
-            float lt=dot(normalize(vN),normalize(vec3(0.4,1.0,0.3)))*0.5+0.5;
-            c*=0.55+lt*0.55; gl_FragColor=vec4(c,1.0);}` }));
-    shaft.position.y=3.7; g.add(shaft);
-    // Capital
-    const cap=new THREE.Mesh(new THREE.CylinderGeometry(0.42,0.26,0.75,16),
-      new THREE.MeshBasicMaterial({color:0x8a6450}));
-    cap.position.y=7.4; g.add(cap);
-    // Plinth
-    const pli=new THREE.Mesh(new THREE.CylinderGeometry(0.40,0.44,0.45,16),
-      new THREE.MeshBasicMaterial({color:0x7a5842}));
-    pli.position.y=0.22; g.add(pli);
-    g.position.set(pos.x,0,pos.z); scene.add(g);
+  // ── COLUMNS: 3 pairs, rose sandstone with deep spiral carved grooves ───
+  // Real Nasir al-Mulk columns are slender with helical fluting
+  [-1,1].forEach(side => {
+    [-7, -2, 3].forEach(z => {
+      const g = new THREE.Group();
+      // Slender octagonal shaft with helical fluting shader
+      const shaft = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.19, 0.24, 8.5, 20),
+        new THREE.ShaderMaterial({
+          vertexShader:`
+            varying vec2 vUv; varying vec3 vN; varying vec3 vWP;
+            void main(){vUv=uv;vN=normalMatrix*normal;
+              vWP=(modelMatrix*vec4(position,1.0)).xyz;
+              gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`,
+          fragmentShader:`
+            varying vec2 vUv; varying vec3 vN; varying vec3 vWP;
+            float h2(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5);}
+            void main(){
+              // Primary helical spiral groove
+              float spiral=sin(vUv.y*18.0+vUv.x*6.2832*5.0)*0.5+0.5;
+              // Secondary fine texture
+              float fine=sin(vUv.y*90.0)*0.5+0.5;
+              float micro=sin(vUv.y*240.0+vUv.x*31.4)*0.3+0.5;
+              // Rose sandstone base colors
+              vec3 roseLight=vec3(0.80,0.62,0.54);
+              vec3 roseDark =vec3(0.60,0.43,0.36);
+              vec3 cream    =vec3(0.88,0.80,0.70);
+              vec3 c=mix(roseDark,roseLight,spiral);
+              c=mix(c,cream,fine*0.18+micro*0.07);
+              // Deep carved valley tint
+              c=mix(c*0.62,c,smoothstep(0.35,0.55,spiral));
+              // Diffuse lighting
+              vec3 L=normalize(vec3(-0.5,1.0,0.4));
+              float diff=dot(normalize(vN),L)*0.5+0.5;
+              c*=0.50+diff*0.58;
+              // Specular highlight from window side
+              vec3 V=normalize(vec3(-vWP.x,-vWP.y+2.0,-vWP.z+4.0));
+              vec3 H=normalize(L+V);
+              float spec=pow(max(0.0,dot(normalize(vN),H)),28.0)*0.25;
+              c+=spec*vec3(1.0,0.95,0.85);
+              gl_FragColor=vec4(c,1.0);}` }));
+      shaft.position.y = 4.0; g.add(shaft);
+
+      // Capital: elaborate muqarnas-style (stack of tapered rings)
+      [[0.42,0.22,0.4],[0.52,0.38,0.22],[0.40,0.48,0.15]].forEach(([r0,r1,h],i) => {
+        const cap = new THREE.Mesh(
+          new THREE.CylinderGeometry(r1,r0,h,16),
+          new THREE.MeshStandardMaterial({
+            color:0x9a7060, roughness:0.75, metalness:0.05}));
+        cap.position.y = 8.35 + i*0.17; g.add(cap);
+      });
+
+      // Plinth / base: square socle
+      const socle = new THREE.Mesh(
+        new THREE.BoxGeometry(0.68,0.48,0.68),
+        new THREE.MeshStandardMaterial({color:0x7a5840,roughness:0.85}));
+      socle.position.y=0.24; g.add(socle);
+
+      g.position.set(side*4.6, 0, z);
+      scene.add(g);
+    });
   });
 
-  // ─── POINTED ARCHES between columns ────────────────────────────────────
-  function makeArch(xPos, z1, z2){
-    const span=Math.abs(z2-z1); const cZ=(z1+z2)/2;
-    const rise=span*0.68;
-    const curve=new THREE.CatmullRomCurve3([
-      new THREE.Vector3(-span/2,0,0),
-      new THREE.Vector3(-span/2,rise*0.48,0),
-      new THREE.Vector3(-span*0.28,rise*0.90,0),
-      new THREE.Vector3(0,rise,0),
-      new THREE.Vector3(span*0.28,rise*0.90,0),
-      new THREE.Vector3(span/2,rise*0.48,0),
-      new THREE.Vector3(span/2,0,0),
-    ],false);
-    const tube=new THREE.Mesh(
-      new THREE.TubeGeometry(curve,48,0.11,8,false),
-      new THREE.ShaderMaterial({
-        vertexShader:`varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`,
-        fragmentShader:`varying vec2 vUv;void main(){
-          vec3 roseStone=vec3(0.75,0.55,0.47);
-          float band=sin(vUv.y*30.0)*0.5+0.5;
-          roseStone=mix(roseStone*0.85,roseStone,band);
-          gl_FragColor=vec4(roseStone,1.0);}` }));
-    tube.position.set(xPos,7.55,cZ); tube.rotation.y=Math.PI/2;
-    scene.add(tube);
+  // ── POINTED ARCHES between column pairs ───────────────────────────────
+  function parchArch(x, zA, zB, rotY) {
+    const span = Math.abs(zB-zA);
+    const cZ = (zA+zB)*0.5;
+    const rise = span * 0.72;
+    // Build pointed arch as lathe or tube
+    const pts = [];
+    const N = 32;
+    for(let i=0;i<=N;i++){
+      const t=i/N;
+      // Left half of arch (mirror)
+      if(t<=0.5){
+        const a=t*2.0;
+        const ax=-span/2*(1.0-a)*0.98;
+        const ay=rise*(1.0-Math.pow(1.0-a,1.6));
+        pts.push(new THREE.Vector3(ax,ay,0));
+      } else {
+        const a=(t-0.5)*2.0;
+        const ax=span/2*a*0.98;
+        const ay=rise*(1.0-Math.pow(a,1.6));
+        pts.push(new THREE.Vector3(ax,ay,0));
+      }
+    }
+    const curve = new THREE.CatmullRomCurve3(pts,false);
+    const archMesh = new THREE.Mesh(
+      new THREE.TubeGeometry(curve,60,0.14,8,false),
+      new THREE.MeshStandardMaterial({
+        color:0x9e7060, roughness:0.78,
+        map: null}));
+    archMesh.position.set(x, 8.55, cZ);
+    if(rotY) archMesh.rotation.y = rotY;
+    scene.add(archMesh);
   }
-  [[-4.5,-8,-3],[-4.5,-3,2],[4.5,-8,-3],[4.5,-3,2]].forEach(a=>makeArch(a[0],a[1],a[2]));
-  // Cross arches (between the two rows at each column level)
-  [-8,-3,2].forEach(z=>{
-    makeArch(0,-4.5,4.5); // won't work as-is, need corrected approach
+  // Longitudinal arches along each row
+  [-4.6,4.6].forEach(x=>{
+    parchArch(x,-7,-2,0);
+    parchArch(x,-2, 3,0);
+  });
+  // Cross arches between rows (perpendicular)
+  [-7,-2,3].forEach(z=>{
+    parchArch(0, z-4.6, z+4.6, Math.PI/2);
   });
 
-  // ─── CEILING: golden muqarnas / Islamic vault ───────────────────────────
-  const ceilGeo=new THREE.PlaneGeometry(16,36,60,60);
-  const ceilVerts=ceilGeo.attributes.position;
+  // ── CEILING: barrel‑vaulted with photorealistic muqarnas shader ────────
+  const ceilGeo = new THREE.PlaneGeometry(15, 34, 80, 80);
+  const ceilVerts = ceilGeo.attributes.position;
   for(let i=0;i<ceilVerts.count;i++){
-    const x=ceilVerts.getX(i), y=ceilVerts.getY(i);
-    const barrel=Math.cos(x/16*Math.PI)*1.8;
-    const crossRib=Math.max(0,Math.cos(y/5*Math.PI))*0.5;
-    ceilVerts.setZ(i,barrel+crossRib*0.25);
+    const x=ceilVerts.getX(i);
+    // Barrel vault curves UP from the sides (convex upward when viewed from below)
+    // PlaneGeometry lies in XY, rotated to be ceiling — Z displacement goes outward
+    const barrel = -Math.cos(x/7.5*Math.PI)*1.8 + 1.8; // 0 at edges, 3.6 at center
+    ceilVerts.setZ(i, barrel);
   }
   ceilGeo.computeVertexNormals();
-  const ceilMat=new THREE.ShaderMaterial({
-    side:THREE.DoubleSide, uniforms:globalUni,
-    vertexShader:`varying vec2 vUv; varying vec3 vN;
-      void main(){vUv=uv;vN=normalMatrix*normal;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`,
-    fragmentShader:`uniform float uTime; varying vec2 vUv; varying vec3 vN;
+  const ceilMat = new THREE.ShaderMaterial({
+    side: THREE.DoubleSide, uniforms: globalUni,
+    vertexShader:`
+      varying vec2 vUv; varying vec3 vN; varying vec3 vWP;
+      void main(){vUv=uv;vN=normalMatrix*normal;
+        vWP=(modelMatrix*vec4(position,1.0)).xyz;
+        gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`,
+    fragmentShader:`
+      uniform float uTime; varying vec2 vUv; varying vec3 vN; varying vec3 vWP;
+      // Tiling hash
+      float h3(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5);}
+      float n3(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.0-2.0*f);
+        return mix(mix(h3(i),h3(i+vec2(1,0)),f.x),mix(h3(i+vec2(0,1)),h3(i+vec2(1,1)),f.x),f.y);}
       void main(){
-        vec2 uv=vUv*vec2(7.0,18.0);
+        // Tile at ~9×22 cells across ceiling
+        vec2 uv=vUv*vec2(8.0,20.0);
         vec2 cell=fract(uv)-0.5;
         float r=length(cell);
-        float a=atan(cell.y,cell.x);
-        // 8-pointed star
-        float star=sin(a*8.0)*0.5+0.5;
-        float starMask=smoothstep(0.36+star*0.05,0.32+star*0.05,r);
-        float ring1=smoothstep(0.025,0.0,abs(r-0.35));
-        float ring2=smoothstep(0.020,0.0,abs(r-0.22));
-        float ring3=smoothstep(0.018,0.0,abs(r-0.10));
-        float spokes=smoothstep(0.022,0.0,abs(sin(a*8.0))*r);
-        float grid=max(smoothstep(0.025,0.0,abs(cell.x)),smoothstep(0.025,0.0,abs(cell.y)));
-        vec3 amber=vec3(0.55,0.28,0.06); vec3 gold=vec3(0.82,0.60,0.12);
-        vec3 cream=vec3(0.90,0.82,0.62); vec3 blue2=vec3(0.12,0.18,0.50);
-        vec3 turq=vec3(0.12,0.52,0.58);
-        float cv=fract(dot(floor(uv),vec2(0.37,0.73))*43.7);
-        vec3 c=amber;
-        c=mix(c,cream,starMask*0.65); c=mix(c,gold,ring1*0.80);
-        c=mix(c,cv<0.4?blue2:turq,ring2*0.45); c=mix(c,gold*0.7,ring3*0.6);
-        c=mix(c,gold*0.5,grid*0.35); c=mix(c,amber*0.4,spokes*0.5);
-        // Warm pulse
-        c+=gold*0.05*(sin(uTime*0.4)*0.5+0.5);
-        float lt=dot(normalize(vN),normalize(vec3(0.0,-1.0,0.3)))*0.4+0.6;
-        c*=lt; gl_FragColor=vec4(c,1.0);}` });
-  const ceiling=new THREE.Mesh(ceilGeo,ceilMat);
-  ceiling.rotation.x=Math.PI/2; ceiling.position.set(0,8.2,-8);
+        float ang=atan(cell.y,cell.x);
+        // 8‑pointed star geometry
+        float star8=cos(ang*4.0)*0.5+0.5; // 4 maxima = 8-pt star
+        float starR=0.22+star8*0.11;
+        float starMask=smoothstep(starR+0.025,starR-0.015,r);
+        // Interlace octagon border
+        float oct=cos(ang*4.0+0.3927)*0.5+0.5;
+        float octR=0.38+oct*0.04;
+        float octBorder=smoothstep(0.018,0.0,abs(r-octR));
+        // Concentric ring details
+        float rg1=smoothstep(0.016,0.0,abs(r-0.35));
+        float rg2=smoothstep(0.013,0.0,abs(r-0.23));
+        float rg3=smoothstep(0.011,0.0,abs(r-0.14));
+        // Spokes
+        float spokes=smoothstep(0.016,0.0,abs(sin(ang*8.0))*r*0.95);
+        float halfSpokes=smoothstep(0.013,0.0,abs(sin(ang*4.0+0.3927))*r*(1.0-smoothstep(0.12,0.16,r)));
+        // Cell coloring hash
+        float cv=h3(floor(uv));
+        // Palette: warm amber/gold base with blue/turquoise accents typical of Qajar plasterwork
+        vec3 amber  =vec3(0.52,0.26,0.05);
+        vec3 gold   =vec3(0.82,0.62,0.15);
+        vec3 cream  =vec3(0.91,0.84,0.68);
+        vec3 blue   =vec3(0.11,0.20,0.56);
+        vec3 turq   =vec3(0.11,0.54,0.60);
+        vec3 rose   =vec3(0.72,0.42,0.48);
+        // Base tile
+        vec3 c=mix(amber,cream*0.85,0.3+n3(uv*0.5)*0.15);
+        // Star fill
+        c=mix(c,cv<0.35?cream:cv<0.6?gold:rose,starMask*0.80);
+        // Ring accents
+        c=mix(c,gold*1.1,rg1*0.90);
+        c=mix(c,cv<0.45?blue:turq,rg2*0.70);
+        c=mix(c,gold*0.9,rg3*0.65);
+        // Outlines
+        c=mix(c,amber*0.45,octBorder*0.65);
+        c=mix(c,amber*0.4,(spokes+halfSpokes)*0.55);
+        // Subtle warm pulsing glow (morning light through windows)
+        c+=gold*0.04*sin(uTime*0.35+vWP.z*0.3);
+        // Self-shadowing at vault sides
+        float side=abs(vUv.x-0.5)*2.0;
+        c*=0.72+0.28*(1.0-smoothstep(0.65,1.0,side));
+        // Normal‑based shading
+        float NdotL=dot(normalize(vN),normalize(vec3(-0.5,1.0,0.3)))*0.5+0.5;
+        c*=0.55+NdotL*0.55;
+        gl_FragColor=vec4(c,1.0);}` });
+  const ceiling = new THREE.Mesh(ceilGeo, ceilMat);
+  ceiling.rotation.x = Math.PI/2;
+  ceiling.position.set(0, 7.8, -8);
   scene.add(ceiling); animMats.push(ceilMat);
 
-  // ─── WALLS ──────────────────────────────────────────────────────────────
-  function buildWall(w,h,pos,rotY){
-    const wm=new THREE.ShaderMaterial({side:THREE.DoubleSide,
-      vertexShader:`varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`,
-      fragmentShader:`varying vec2 vUv;void main(){
-        float dado=smoothstep(0.28,0.33,vUv.y);
-        // Upper: rose plaster with fine tracery
-        vec3 rose=vec3(0.70,0.50,0.43);
-        vec2 tr=fract(vUv*vec2(10.0,7.0))-0.5;
-        float t1=smoothstep(0.025,0.0,abs(length(tr)-0.32));
-        float t2=smoothstep(0.018,0.0,abs(tr.x));
-        float t3=smoothstep(0.018,0.0,abs(tr.y));
-        rose+=vec3(0.88,0.75,0.52)*(t1+(t2+t3)*0.28)*0.22;
-        // Lower dado: Islamic tile mosaic
-        vec2 tv=vUv*vec2(9.0,3.5); vec2 tcc=floor(tv); vec2 tf=fract(tv)-0.5;
-        float tg=max(smoothstep(0.025,0.0,abs(tf.x)),smoothstep(0.025,0.0,abs(tf.y)));
-        float th=fract(dot(tcc,vec2(0.37,0.73))*43.7);
-        vec3 tc=th<0.28?vec3(0.12,0.32,0.68):(th<0.52?vec3(0.12,0.58,0.62):(th<0.72?vec3(0.78,0.58,0.10):vec3(0.88,0.84,0.70)));
-        float td=abs(tf.x)+abs(tf.y);
-        tc=mix(tc*0.55,tc,smoothstep(0.38,0.30,td));
-        tc=mix(tc,vec3(0.04,0.04,0.07),tg*0.55);
-        vec3 c=mix(tc,rose,dado);
-        c*=0.5+0.5*smoothstep(0.0,0.25,min(vUv.x,1.0-vUv.x));
-        gl_FragColor=vec4(c*0.72,1.0);}` });
-    const m=new THREE.Mesh(new THREE.PlaneGeometry(w,h,1,1),wm);
-    m.position.copy(pos); m.rotation.y=rotY; scene.add(m); return m;
-  }
-  // Side walls
-  buildWall(38,8.5,new THREE.Vector3(-7.5,4.25,-8), Math.PI/2);
-  buildWall(38,8.5,new THREE.Vector3( 7.5,4.25,-8),-Math.PI/2);
-  // Back wall
-  buildWall(17,8.5,new THREE.Vector3(0,4.25,-26),0);
-  // Front wall (entrance behind camera)
-  buildWall(17,8.5,new THREE.Vector3(0,4.25, 10),Math.PI);
+  // Solid dark back plane above vault (close off top)
+  const topFill = new THREE.Mesh(
+    new THREE.PlaneGeometry(20,40),
+    new THREE.MeshBasicMaterial({color:0x120608,side:THREE.DoubleSide}));
+  topFill.rotation.x=Math.PI/2;
+  topFill.position.set(0,12.0,-8);
+  scene.add(topFill);
 
-  // ─── STAINED GLASS WINDOWS (left wall, 5 large pointed-arch windows) ──
-  const WIN_COLORS=[
-    [0.88,0.12,0.22, 0.96,0.70,0.04, 0.10,0.32,0.85],
-    [0.92,0.50,0.08, 0.10,0.60,0.62, 0.85,0.22,0.65],
-    [0.10,0.30,0.82, 0.88,0.65,0.06, 0.12,0.72,0.32],
-    [0.85,0.22,0.60, 0.95,0.76,0.05, 0.10,0.55,0.65],
-    [0.88,0.12,0.22, 0.10,0.62,0.35, 0.85,0.50,0.10],
+  // ── WALLS ─────────────────────────────────────────────────────────────
+  function buildWall(w,h,pos,rotY){
+    const mat = new THREE.ShaderMaterial({side:THREE.DoubleSide,
+      vertexShader:`varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`,
+      fragmentShader:`varying vec2 vUv;
+        float h4(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5);}
+        void main(){
+          // Dado height: lower 30% = tile mosaic
+          float dado=smoothstep(0.285,0.32,vUv.y);
+          // Upper wall: rose plaster + geometric incised tracery
+          vec3 roseBase=vec3(0.68,0.50,0.44);
+          vec2 trUv=vUv*vec2(12.0,9.0);
+          vec2 trF=fract(trUv)-0.5;
+          float trR=length(trF);
+          // Circular medallion grid
+          float med=smoothstep(0.016,0.0,abs(trR-0.30));
+          // Cross-hatched fine grooves
+          float gv=smoothstep(0.012,0.0,abs(trF.x));
+          float gh=smoothstep(0.012,0.0,abs(trF.y));
+          float diag1=smoothstep(0.012,0.0,abs(trF.x-trF.y));
+          float diag2=smoothstep(0.012,0.0,abs(trF.x+trF.y));
+          float tracery=(med+(gv+gh)*0.2+(diag1+diag2)*0.1)*0.18;
+          vec3 upper=mix(roseBase,vec3(0.88,0.78,0.62),tracery);
+          upper*=0.68+0.32*smoothstep(0.0,0.22,min(vUv.x,1.0-vUv.x));
+          // Lower dado: fine Islamic zellige tiles
+          vec2 tv=vUv*vec2(12.0,4.5);
+          vec2 ti=floor(tv); vec2 tf=fract(tv)-0.5;
+          float tg=max(smoothstep(0.030,0.006,abs(tf.x)),smoothstep(0.030,0.006,abs(tf.y)));
+          float th=h4(ti);
+          vec3 tc;
+          if(th<0.22)       tc=vec3(0.10,0.30,0.68);
+          else if(th<0.42)  tc=vec3(0.10,0.56,0.62);
+          else if(th<0.60)  tc=vec3(0.76,0.56,0.10);
+          else if(th<0.76)  tc=vec3(0.72,0.16,0.36);
+          else              tc=vec3(0.88,0.85,0.72);
+          float td=abs(tf.x)+abs(tf.y);
+          tc=mix(tc*0.45,tc,smoothstep(0.40,0.28,td));
+          tc=mix(tc,vec3(0.04,0.03,0.06),tg*0.65);
+          vec3 c=mix(tc,upper,dado);
+          gl_FragColor=vec4(c*0.76,1.0);}` });
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(w,h,1,1), mat);
+    m.position.copy(pos); m.rotation.y=rotY; scene.add(m);
+  }
+  buildWall(36,9.5, new THREE.Vector3(-7.5,4.75,-8),  Math.PI/2);
+  buildWall(36,9.5, new THREE.Vector3( 7.5,4.75,-8), -Math.PI/2);
+  buildWall(16,9.5, new THREE.Vector3(0,4.75,-26),    0);
+  buildWall(16,9.5, new THREE.Vector3(0,4.75, 11),    Math.PI);
+
+  // ── STAINED GLASS ARCHED WINDOWS — 5 windows, left wall ──────────────
+  // Each window: lower wooden door with geometric coloured panes + upper
+  // pointed‑arch rosette window. Closely matches real photos.
+  const WIN_DATA = [
+    { colors: [[1,0,0],[0,0.7,0.9],[1,0.75,0],[0.2,0.5,1],[0.9,0.2,0.6]] },
+    { colors: [[0.9,0.3,0.1],[0,0.65,0.62],[0.95,0.8,0],[0.15,0.3,0.9],[0.8,0.15,0.7]] },
+    { colors: [[0.1,0.3,0.9],[1,0.7,0],[0.9,0.1,0.2],[0.1,0.7,0.3],[0.9,0.5,0.1]] },
+    { colors: [[0.8,0.15,0.65],[0.95,0.75,0],[0.1,0.55,0.65],[0.9,0.2,0.15],[0.15,0.5,0.2]] },
+    { colors: [[1,0.1,0.18],[0.15,0.62,0.35],[0.9,0.6,0],[0.1,0.28,0.85],[0.85,0.4,0.1]] },
   ];
-  const windowAnimMats=[];
 
   for(let wi=0;wi<5;wi++){
-    const wZ=(wi-2)*5-6;
-    const wX=-7.48;
+    const wZ = (wi-2)*5.2 - 5.5;
+    const wX = -7.46;
+    const WW = 2.4, WH = 4.2;
 
-    // Arch shape geometry
-    const wW=2.2, wH=3.8;
-    const archShape=new THREE.Shape();
-    archShape.moveTo(-wW/2,0);
-    archShape.lineTo(-wW/2,wH*0.52);
-    archShape.quadraticCurveTo(-wW*0.38,wH*1.0,0,wH);
-    archShape.quadraticCurveTo( wW*0.38,wH*1.0,wW/2,wH*0.52);
-    archShape.lineTo(wW/2,0);
+    // ── LOWER PANE GRID (wooden frame + 3×4 coloured glass panes) ──
+    const lowerH = WH * 0.56;
+    const cols = WIN_DATA[wi].colors;
+    const paneW = WW/3, paneH = lowerH/4;
+    for(let row=0;row<4;row++){
+      for(let col=0;col<3;col++){
+        const c=cols[(row+col)%5];
+        const pUni={uTime:{value:0},uC:{value:new THREE.Vector3(c[0],c[1],c[2])},uWi:{value:wi}};
+        const pMat=new THREE.ShaderMaterial({
+          transparent:true, side:THREE.DoubleSide, uniforms:pUni,
+          vertexShader:`varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`,
+          fragmentShader:`
+            uniform float uTime; uniform vec3 uC; uniform float uWi;
+            varying vec2 vUv;
+            void main(){
+              // Circular rosette pattern inside each pane
+              vec2 uv=vUv-0.5;
+              float r=length(uv); float ang=atan(uv.y,uv.x);
+              float petals=abs(sin(ang*6.0))*0.5+0.5;
+              float ring=smoothstep(0.016,0.0,abs(r-0.32));
+              float ring2=smoothstep(0.012,0.0,abs(r-0.20));
+              float spk=smoothstep(0.015,0.0,abs(sin(ang*6.0))*r*0.85);
+              vec3 c2=uC;
+              // Lighter petal fills
+              c2=mix(c2,uC*1.4+0.1,petals*smoothstep(0.20,0.05,r)*0.5);
+              // Dark lead lines
+              c2=mix(c2,vec3(0.04,0.03,0.02),(ring+ring2+spk)*0.80);
+              // Edge lead strip
+              float edge=1.0-smoothstep(0.0,0.045,min(min(vUv.x,1.0-vUv.x),min(vUv.y,1.0-vUv.y)));
+              c2=mix(c2,vec3(0.05,0.04,0.03),edge*0.85);
+              // Glow animation
+              float glw=0.85+0.15*sin(uTime*0.5+uWi*1.3+float(int(uWi))*0.7);
+              c2*=glw;
+              float a=(1.0-edge)*0.93;
+              gl_FragColor=vec4(c2,a);}` });
+        const pm=new THREE.Mesh(
+          new THREE.PlaneGeometry(paneW-0.06,paneH-0.05),pMat);
+        pm.position.set(
+          wX, 0.35+paneH*0.5+row*paneH, wZ+(-1+col)*paneW+paneW*0.5);
+        pm.rotation.y=Math.PI/2;
+        scene.add(pm); windowAnimMats.push(pMat);
+      }
+    }
+
+    // ── UPPER ARCH ROSETTE WINDOW ────────────────────────────────────
+    const upperBase = 0.35 + lowerH;
+    const archShape = new THREE.Shape();
+    archShape.moveTo(-WW/2, 0);
+    archShape.lineTo(-WW/2, WH*0.55);
+    archShape.quadraticCurveTo(-WW*0.36, WH*0.98, 0, WH*0.46);
+    archShape.quadraticCurveTo( WW*0.36, WH*0.98, WW/2, WH*0.55);
+    archShape.lineTo(WW/2, 0);
     archShape.closePath();
-    const winGeo=new THREE.ShapeGeometry(archShape,32);
-
-    const wIdx=wi; const wc=WIN_COLORS[wi];
-    const wUni={uTime:{value:0},uIdx:{value:wIdx},
-      uC0:{value:new THREE.Vector3(wc[0],wc[1],wc[2])},
-      uC1:{value:new THREE.Vector3(wc[3],wc[4],wc[5])},
-      uC2:{value:new THREE.Vector3(wc[6],wc[7],wc[8])}};
-    const winMat=new THREE.ShaderMaterial({
-      transparent:true, side:THREE.DoubleSide, uniforms:wUni,
-      vertexShader:`varying vec2 vPos;
-        void main(){vPos=position.xy;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`,
-      fragmentShader:`uniform float uTime; uniform float uIdx;
+    const archGeo=new THREE.ShapeGeometry(archShape,40);
+    const ac=cols[0];
+    const aUni={uTime:{value:0},uWi:{value:wi},
+      uC0:{value:new THREE.Vector3(ac[0],ac[1],ac[2])},
+      uC1:{value:new THREE.Vector3(cols[1][0],cols[1][1],cols[1][2])},
+      uC2:{value:new THREE.Vector3(cols[2][0],cols[2][1],cols[2][2])}};
+    const archMat=new THREE.ShaderMaterial({
+      transparent:true, side:THREE.DoubleSide, uniforms:aUni,
+      vertexShader:`varying vec2 vPos;void main(){vPos=position.xy;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`,
+      fragmentShader:`
+        uniform float uTime; uniform float uWi;
         uniform vec3 uC0,uC1,uC2;
         varying vec2 vPos;
+        #define WW ${WW.toFixed(2)}
+        #define WH ${(WH*0.46).toFixed(2)}
         void main(){
-          // Normalize to [0,1] within arch bounding box
-          float W=${wW.toFixed(2)};float H=${wH.toFixed(2)};
-          vec2 uv=vec2(vPos.x/W*0.5+0.5, vPos.y/H);
-          vec2 cen=uv-0.5;
+          vec2 uv=vec2(vPos.x/WW*0.5+0.5, vPos.y/WH);
+          vec2 cen=uv-vec2(0.5,0.3);
           float ang=atan(cen.y,cen.x);
-          float rad=length(cen);
-          // Split: upper rose window (top 45%) vs lower grid (bottom 55%)
-          float inRose=smoothstep(0.50,0.52,uv.y);
-          // ── ROSE WINDOW (top half) ──
-          float seg8=floor(mod((ang/6.283+0.5)*8.0,8.0));
-          float petal=sin(ang*8.0)*0.5+0.5;
-          float petal6=sin(ang*6.0+uTime*0.25)*0.5+0.5;
-          float ring1=smoothstep(0.022,0.0,abs(rad*1.4-0.36));
-          float ring2=smoothstep(0.018,0.0,abs(rad*1.4-0.23));
-          float ring3=smoothstep(0.016,0.0,abs(rad*1.4-0.13));
-          float spoke=smoothstep(0.026,0.0,abs(sin(ang*8.0))*rad*0.9);
-          float halfSpoke=smoothstep(0.022,0.0,abs(sin(ang*4.0+0.393))*rad*(1.0-smoothstep(0.13,0.18,rad)));
-          vec3 sc;
-          if(mod(seg8,3.0)<1.0) sc=uC0;
-          else if(mod(seg8,3.0)<2.0) sc=uC1;
-          else sc=uC2;
-          vec3 roseCol=mix(uC1,uC0,petal*(1.0-smoothstep(0.26,0.35,rad)));
-          roseCol=mix(roseCol,uC2,petal6*smoothstep(0.12,0.20,rad)*0.5);
-          roseCol=mix(roseCol,sc,smoothstep(0.28,0.38,rad*1.4));
-          roseCol=mix(roseCol,uC1*1.4,smoothstep(0.10,0.04,rad)); // center glow
-          // Lead lines
-          roseCol=mix(roseCol,vec3(0.04,0.02,0.01),(ring1+ring2+ring3+spoke+halfSpoke)*0.72);
-          // ── LOWER GRID ──
-          vec2 gUv=vec2(uv.x*4.0,uv.y*6.0);
-          vec2 gF=fract(gUv)-0.5;
-          float gLine=max(smoothstep(0.05,0.01,abs(gF.x)),smoothstep(0.05,0.01,abs(gF.y)));
-          float gH=fract(dot(floor(gUv),vec2(0.37,0.73))*43.7+uIdx*5.7);
-          vec3 gC=gH<0.33?uC0:(gH<0.66?uC1:uC2);
-          float diam=abs(gF.x)+abs(gF.y);
-          gC=mix(gC*0.55,gC,smoothstep(0.38,0.28,diam));
-          gC=mix(gC,vec3(0.03,0.02,0.01),gLine*0.75);
-          // Blend
-          vec3 col=mix(gC,roseCol,inRose);
-          // Brightness pulse
-          float glow=0.82+0.18*sin(uTime*0.55+uIdx*1.4);
-          col*=glow*1.35;
-          // Edge alpha
-          float edgeA=smoothstep(0.0,0.025,min(uv.x,1.0-uv.x));
-          gl_FragColor=vec4(col,edgeA*0.94);}`});
-    const winMesh=new THREE.Mesh(winGeo,winMat);
-    winMesh.position.set(wX,1.2,wZ);
-    winMesh.rotation.y=Math.PI/2;
-    scene.add(winMesh);
-    windowAnimMats.push(winMat);
+          float rad=length(cen)*1.6;
+          // 12-petal rosette
+          float pet12=cos(ang*6.0)*0.5+0.5;
+          float pet8=cos(ang*4.0)*0.5+0.5;
+          // Concentric rings with spokes
+          float rg1=smoothstep(0.016,0.0,abs(rad-0.52));
+          float rg2=smoothstep(0.013,0.0,abs(rad-0.36));
+          float rg3=smoothstep(0.010,0.0,abs(rad-0.22));
+          float rg4=smoothstep(0.010,0.0,abs(rad-0.10));
+          float spk12=smoothstep(0.018,0.0,abs(sin(ang*12.0))*rad*0.8);
+          float spk6=smoothstep(0.016,0.0,abs(sin(ang*6.0))*rad*(1.0-smoothstep(0.14,0.22,rad)));
+          // Segment colors
+          float segI=floor(mod((ang/6.2832+0.5)*12.0,12.0));
+          vec3 sc=mod(segI,3.0)<1.0?uC0:mod(segI,3.0)<2.0?uC1:uC2;
+          // Base field: petal-driven mix
+          vec3 col=mix(uC1,uC0,pet12*(1.0-smoothstep(0.20,0.42,rad)));
+          col=mix(col,uC2,pet8*smoothstep(0.18,0.36,rad)*0.6);
+          col=mix(col,sc,smoothstep(0.36,0.46,rad));
+          col=mix(col,uC0*1.4,smoothstep(0.12,0.0,rad)); // bright centre
+          // Lead lines (dark)
+          float lead=rg1+rg2+rg3+rg4+spk12+spk6;
+          col=mix(col,vec3(0.04,0.03,0.02),min(lead,1.0)*0.78);
+          float glw=0.88+0.12*sin(uTime*0.48+uWi*1.7);
+          col*=glw*1.3;
+          float edge=1.0-smoothstep(0.0,0.035,min(uv.x,1.0-uv.x));
+          gl_FragColor=vec4(col,max(0.0,1.0-edge)*0.92);}` });
+    const archMesh=new THREE.Mesh(archGeo,archMat);
+    archMesh.position.set(wX, upperBase, wZ);
+    archMesh.rotation.y=Math.PI/2;
+    scene.add(archMesh); windowAnimMats.push(archMat);
 
-    // Arch frame (wooden)
-    const fCurve=new THREE.CatmullRomCurve3([
-      new THREE.Vector3(-wW/2,0,0),
-      new THREE.Vector3(-wW/2,wH*0.52,0),
-      new THREE.Vector3(-wW*0.3,wH*0.97,0),
-      new THREE.Vector3(0,wH,0),
-      new THREE.Vector3(wW*0.3,wH*0.97,0),
-      new THREE.Vector3(wW/2,wH*0.52,0),
-      new THREE.Vector3(wW/2,0,0),
+    // Arch frame (dark wood)
+    const fc=new THREE.CatmullRomCurve3([
+      new THREE.Vector3(-WW/2,0,0),
+      new THREE.Vector3(-WW/2,WH*0.3,0),
+      new THREE.Vector3(-WW*0.32,WH*0.44,0),
+      new THREE.Vector3(0,WH*0.46*1.02,0),
+      new THREE.Vector3( WW*0.32,WH*0.44,0),
+      new THREE.Vector3( WW/2,WH*0.3,0),
+      new THREE.Vector3( WW/2,0,0),
     ],false);
-    const frameMesh=new THREE.Mesh(
-      new THREE.TubeGeometry(fCurve,44,0.07,8,false),
-      new THREE.MeshBasicMaterial({color:0x3a1c08}));
-    frameMesh.position.set(wX,1.2,wZ);
-    frameMesh.rotation.y=Math.PI/2;
-    scene.add(frameMesh);
+    const fMesh=new THREE.Mesh(
+      new THREE.TubeGeometry(fc,48,0.055,8,false),
+      new THREE.MeshStandardMaterial({color:0x2a1008,roughness:0.7}));
+    fMesh.position.set(wX,upperBase,wZ);
+    fMesh.rotation.y=Math.PI/2; scene.add(fMesh);
 
-    // Colored point light from each window
-    const lc=new THREE.Color(wc[0],wc[1],wc[2]);
-    const wLight=new THREE.PointLight(lc,3.5,15,1.7);
-    wLight.position.set(-5.0,3.5,wZ); scene.add(wLight);
-    const floorLight=new THREE.PointLight(lc,2.0,9,2.2);
-    floorLight.position.set(-1.5,0.15,wZ); scene.add(floorLight);
+    // Vertical door frame
+    [[-WW/2+0.03],[WW/2-0.03]].forEach(([dx])=>{
+      const vm=new THREE.Mesh(
+        new THREE.BoxGeometry(0.065,lowerH+0.05,0.065),
+        new THREE.MeshStandardMaterial({color:0x2a1008}));
+      vm.position.set(wX,0.35+lowerH/2,wZ+dx);
+      vm.rotation.y=Math.PI/2; scene.add(vm);
+    });
+
+    // Colored lights from each window
+    const lc=new THREE.Color(ac[0],ac[1],ac[2]);
+    const wLt=new THREE.PointLight(lc,4.0,16,1.6);
+    wLt.position.set(-5.0,4.0,wZ); scene.add(wLt);
+    const fLt=new THREE.PointLight(lc,2.5,10,2.0);
+    fLt.position.set(-1.5,0.12,wZ); scene.add(fLt);
   }
 
-  // ─── LIGHT RAYS (volumetric cones from windows) ─────────────────────
-  const rayPalette=[0xe91e63,0xffa726,0x2196f3,0x4caf50,0xf06292];
+  // ── LIGHT RAYS (additive volumetric cones) ───────────────────────────
+  const rayColors=[0xe91e63,0xffa726,0x2196f3,0x26c6da,0xf06292];
   for(let ri=0;ri<5;ri++){
-    const rZ=(ri-2)*5-6;
-    const rGeo=new THREE.CylinderGeometry(0.06,3.2,10,8,1,true);
-    const rMat=new THREE.MeshBasicMaterial({
-      color:rayPalette[ri],transparent:true,opacity:0.055,
+    const rZ=(ri-2)*5.2-5.5;
+    // Wide cone
+    const rm1=new THREE.MeshBasicMaterial({
+      color:rayColors[ri],transparent:true,opacity:0.048,
       blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide});
-    const ray=new THREE.Mesh(rGeo,rMat);
-    ray.position.set(-3.0,2.8,rZ); ray.rotation.z=-Math.PI/2.3;
-    scene.add(ray);
-    // Smaller secondary ray for depth
-    const rGeo2=new THREE.CylinderGeometry(0.03,1.5,7,6,1,true);
-    const rMat2=new THREE.MeshBasicMaterial({
-      color:rayPalette[ri],transparent:true,opacity:0.08,
+    const ray=new THREE.Mesh(new THREE.CylinderGeometry(0.04,3.5,11,6,1,true),rm1);
+    ray.position.set(-2.8,2.6,rZ); ray.rotation.z=-Math.PI/2.2; scene.add(ray);
+    // Narrow bright inner ray
+    const rm2=new THREE.MeshBasicMaterial({
+      color:rayColors[ri],transparent:true,opacity:0.11,
       blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide});
-    const ray2=new THREE.Mesh(rGeo2,rMat2);
-    ray2.position.set(-2.6,2.4,rZ); ray2.rotation.z=-Math.PI/2.3;
-    scene.add(ray2);
+    const ray2=new THREE.Mesh(new THREE.CylinderGeometry(0.02,1.0,8,5,1,true),rm2);
+    ray2.position.set(-3.5,3.2,rZ); ray2.rotation.z=-Math.PI/2.2; scene.add(ray2);
   }
 
-  // ─── FLOOR LIGHT PROJECTIONS (animated stained‑glass shadows) ────────
+  // ── FLOOR STAINED-GLASS PROJECTIONS ──────────────────────────────────
   for(let fi=0;fi<5;fi++){
-    const fZ=(fi-2)*5-6;
-    const pUni={uTime:{value:0},uIdx:{value:fi}};
-    const pMat=new THREE.ShaderMaterial({
+    const fZ=(fi-2)*5.2-5.5;
+    const fUni={uTime:{value:0},uIdx:{value:fi}};
+    const fMat=new THREE.ShaderMaterial({
       side:THREE.FrontSide,transparent:true,depthWrite:false,
-      blending:THREE.AdditiveBlending,uniforms:pUni,
+      blending:THREE.AdditiveBlending, uniforms:fUni,
       vertexShader:`varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`,
-      fragmentShader:`uniform float uTime;uniform float uIdx;varying vec2 vUv;
+      fragmentShader:`
+        uniform float uTime; uniform float uIdx; varying vec2 vUv;
         void main(){
-          vec2 uv=vUv;
-          float pulse=0.72+0.28*sin(uTime*0.40+uIdx*1.9);
-          // Grid from window panes
-          vec2 g=fract(uv*vec2(3.0,4.5));
-          float gL=max(smoothstep(0.07,0.02,abs(g.x-0.5)),smoothstep(0.07,0.02,abs(g.y-0.5)));
-          // Radial from rose window
-          vec2 c2=uv-vec2(0.25,0.7);
-          float rr=length(c2*vec2(1.0,0.7));
-          float radial=sin(atan(c2.y,c2.x)*6.0+uTime*0.35)*0.5+0.5;
-          float rm=smoothstep(0.38,0.0,rr);
-          // Per-window color
-          vec3 pals[5]; pals[0]=vec3(0.88,0.10,0.22); pals[1]=vec3(0.96,0.68,0.04);
-          pals[2]=vec3(0.10,0.32,0.88); pals[3]=vec3(0.10,0.72,0.32); pals[4]=vec3(0.90,0.35,0.72);
+          float pulse=0.70+0.30*sin(uTime*0.42+uIdx*2.0);
+          // Pane grid shadow
+          vec2 g=fract(vUv*vec2(3.0,5.0));
+          float gL=max(smoothstep(0.07,0.018,abs(g.x-0.5)),smoothstep(0.07,0.018,abs(g.y-0.5)));
+          // Radial rosette
+          vec2 c2=(vUv-vec2(0.3,0.78))*vec2(1.0,0.5);
+          float rr=length(c2); float aa=atan(c2.y,c2.x);
+          float rad=sin(aa*6.0+uTime*0.32)*0.5+0.5;
+          float rm=smoothstep(0.4,0.0,rr);
+          // Per-window palette
+          vec3 pals[5];
+          pals[0]=vec3(0.90,0.08,0.18); pals[1]=vec3(0.95,0.65,0.03);
+          pals[2]=vec3(0.08,0.28,0.90); pals[3]=vec3(0.08,0.70,0.30);
+          pals[4]=vec3(0.88,0.30,0.68);
           int ci=int(mod(uIdx,5.0));
-          vec3 bc; if(ci==0)bc=pals[0]; else if(ci==1)bc=pals[1]; else if(ci==2)bc=pals[2];
-          else if(ci==3)bc=pals[3]; else bc=pals[4];
-          float bright=(radial*rm*0.65+(1.0-gL)*0.35);
-          float ef=smoothstep(0.0,0.14,min(min(uv.x,1.0-uv.x),min(uv.y,1.0-uv.y)));
-          gl_FragColor=vec4(bc*bright*pulse,bright*ef*0.22);}`});
-    const pMesh=new THREE.Mesh(new THREE.PlaneGeometry(5,6),pMat);
-    pMesh.rotation.x=-Math.PI/2; pMesh.position.set(-1.8,0.04,fZ);
-    scene.add(pMesh); windowAnimMats.push(pMat);
+          vec3 bc;
+          if(ci==0)bc=pals[0]; else if(ci==1)bc=pals[1];
+          else if(ci==2)bc=pals[2]; else if(ci==3)bc=pals[3]; else bc=pals[4];
+          float bright=(rad*rm*0.60+(1.0-gL)*0.40)*pulse;
+          float ef=smoothstep(0.0,0.12,min(min(vUv.x,1.0-vUv.x),min(vUv.y,1.0-vUv.y)));
+          gl_FragColor=vec4(bc*bright,bright*ef*0.28);
+        }`});
+    const projMesh=new THREE.Mesh(new THREE.PlaneGeometry(6,7),fMat);
+    projMesh.rotation.x=-Math.PI/2;
+    projMesh.position.set(-1.5,0.04,fZ);
+    scene.add(projMesh); windowAnimMats.push(fMat);
   }
 
-  // ─── DUST PARTICLES in light beams ──────────────────────────────────
-  const DN=700; const dPos=new Float32Array(DN*3); const dSz=new Float32Array(DN);
+  // ── DUST MOTES floating in light beams ───────────────────────────────
+  const DN=800; const dPos=new Float32Array(DN*3); const dSz=new Float32Array(DN);
   for(let i=0;i<DN;i++){
-    dPos[i*3]=(Math.random()-0.5)*14;
-    dPos[i*3+1]=Math.random()*7.5;
+    dPos[i*3  ]=(Math.random()-0.5)*14;
+    dPos[i*3+1]= Math.random()*8.5;
     dPos[i*3+2]=(Math.random()-0.5)*32-8;
-    dSz[i]=Math.random()*1.8+0.4;
+    dSz[i]=Math.random()*2.0+0.5;
   }
   const dGeo=new THREE.BufferGeometry();
   dGeo.setAttribute('position',new THREE.BufferAttribute(dPos,3));
@@ -1600,31 +1809,35 @@ locationBuilders['nasir-al-mulk'] = function(scene, camera, controls) {
   const dUni={uTime:{value:0}};
   const dMat=new THREE.ShaderMaterial({
     transparent:true,depthWrite:false,blending:THREE.AdditiveBlending,uniforms:dUni,
-    vertexShader:`attribute float size;uniform float uTime;varying float vA;
+    vertexShader:`
+      attribute float size; uniform float uTime; varying float vA;
       void main(){
         vec3 p=position;
-        p.y+=sin(uTime*0.26+position.x*1.7)*0.5;
-        p.x+=cos(uTime*0.19+position.z*0.5)*0.28;
+        p.y+=sin(uTime*0.24+position.x*1.9+position.z*0.4)*0.55;
+        p.x+=cos(uTime*0.17+position.z*0.5)*0.32;
+        p.z+=sin(uTime*0.12+position.x*0.7)*0.20;
         vec4 mv=modelViewMatrix*vec4(p,1.0);
-        gl_PointSize=size*(88.0/-mv.z);
+        gl_PointSize=size*(96.0/-mv.z);
         gl_Position=projectionMatrix*mv;
-        float wp=smoothstep(3.0,-6.0,p.x)*smoothstep(0.0,3.5,p.y);
-        vA=(0.11+wp*0.55)*smoothstep(260.0,7.0,-mv.z);}`,
-    fragmentShader:`varying float vA;
-      void main(){float d=length(gl_PointCoord-0.5);
-        gl_FragColor=vec4(1.0,0.88,0.68,smoothstep(0.5,0.1,d)*vA);}`});
+        float wp=smoothstep(4.0,-6.0,p.x)*smoothstep(0.0,3.5,p.y);
+        vA=(0.10+wp*0.6)*smoothstep(280.0,8.0,-mv.z);}`,
+    fragmentShader:`
+      varying float vA;
+      void main(){
+        float d=length(gl_PointCoord-0.5);
+        gl_FragColor=vec4(1.0,0.90,0.72,smoothstep(0.5,0.08,d)*vA);}` });
   scene.add(new THREE.Points(dGeo,dMat));
 
+  // ── UPDATE + DISPOSE ──────────────────────────────────────────────────
   return {
     update(t){
       globalUni.uTime.value=t; dUni.uTime.value=t;
-      windowAnimMats.forEach(m=>{if(m.uniforms.uTime)m.uniforms.uTime.value=t;});
-      chandA.intensity=2.9+Math.sin(t*0.75)*0.4;
-      chandB.intensity=2.5+Math.cos(t*0.58)*0.35;
+      windowAnimMats.forEach(m=>{if(m.uniforms&&m.uniforms.uTime)m.uniforms.uTime.value=t;});
     },
     dispose(){}
   };
 };
+
 
 // ============================================================
 //  RESIZE
