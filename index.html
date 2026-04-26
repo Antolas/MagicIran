@@ -349,6 +349,12 @@
       0 0 0 4px rgba(0,0,0,0.55),
       0 30px 90px rgba(0,0,0,0.85),
       inset 0 0 0 1px rgba(255,255,255,0.06);
+    cursor: zoom-in;
+    transition: transform 0.2s, box-shadow 0.2s;
+  }
+  #tour-img-panel .tip-img:hover {
+    transform: scale(1.025);
+    box-shadow: 0 0 0 4px rgba(245,175,25,0.5), 0 30px 90px rgba(0,0,0,0.85);
   }
   #tour-img-panel .tip-caption {
     text-align: center;
@@ -3641,15 +3647,15 @@ const tourScript = [
     { cam:[0,3.5,18], target:[0,4,0],
       label:'Persepolis · Tappa 1 di 3', title:'La Città dei Persiani',
       text:'Fondata da Dario il Grande nel 518 a.C., Persepolis era il cuore cerimoniale dell\'Impero Achemenide — il più grande del mondo antico. Ogni pietra porta incisi i nomi di trenta nazioni conquistate.',
-      img: 'https://commons.wikimedia.org/wiki/Special:FilePath/Persepolis_2012.jpg?width=800' },
+      img: 'https://upload.wikimedia.org/wikipedia/commons/thumb/7/79/Persepolis_2012.jpg/800px-Persepolis_2012.jpg' },
     { cam:[10,6,5], target:[0,5,0],
       label:'Persepolis · Tappa 2 di 3', title:'Le Cento Colonne',
       text:'Il palazzo delle Cento Colonne poteva ospitare diecimila persone. Le colonne alte 20 metri sostenevano un tetto di cedro del Libano. Alessandro Magno lo incendiò nel 330 a.C. come atto simbolico di vendetta.',
-      img: 'https://commons.wikimedia.org/wiki/Special:FilePath/Persepolis_Iran.jpg?width=800' },
+      img: 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/a7/Persepolis_iran.jpg/800px-Persepolis_iran.jpg' },
     { cam:[-8,10,8], target:[0,4,0],
       label:'Persepolis · Tappa 3 di 3', title:'Il Portale delle Nazioni',
       text:'Nel grande rilievo dell\'Apadana, delegazioni di 23 nazioni portano tributi al Re dei Re. È il più antico ritratto della "diversità delle genti" mai scolpito nella pietra.',
-      img: 'https://commons.wikimedia.org/wiki/Special:FilePath/Gate_of_all_nations_persepolis.jpg?width=800' },
+      img: 'https://upload.wikimedia.org/wikipedia/commons/thumb/b/b1/Perspolis10.jpg/800px-Perspolis10.jpg' },
   ]},
   { id: 'nasir-al-mulk', steps: [
     { cam:[0,1.9,6], target:[0,3.2,-4],
@@ -3807,6 +3813,7 @@ const TourController = {
       document.getElementById('tour-img-caption').textContent = step.title;
       imgEl.onload = () => panel.classList.add('visible');
       imgEl.onerror = () => {};
+      imgEl.onclick = () => openLightbox(step.img);
       imgEl.src = step.img;
     }
 
@@ -3848,65 +3855,36 @@ const TourController = {
   },
 
   _speak(text) {
-    if (!this._voiceOn) return;
+    if (!this._voiceOn || !window.speechSynthesis) return;
     this._stopSpeech();
-    // Tronca testo a max 200 char per chunk (limite endpoint Google TTS)
-    const chunks = this._chunkText(text, 190);
-    this._audioQueue = chunks;
-    this._audioIdx = 0;
-    this._playNext();
-  },
-
-  _playNext() {
-    if (!this._voiceOn || !this._audioQueue || this._audioIdx >= this._audioQueue.length) return;
-    const chunk = this._audioQueue[this._audioIdx];
-    // StreamElements TTS — voce neurale Microsoft it-IT-DiegoNeural (maschile)
-    const url = 'https://api.streamelements.com/kappa/v2/speech?voice=it-IT-DiegoNeural' +
-      '&text=' + encodeURIComponent(chunk);
-    const audio = new Audio(url);
-    audio.volume = 1.0;
-    this._currentAudio = audio;
-    audio.onended = () => {
-      this._audioIdx++;
-      this._playNext();
+    // Selezione voce maschile italiana con attesa async (Chrome carica voci in modo lazy)
+    const doSpeak = () => {
+      const voices = speechSynthesis.getVoices();
+      // Preferenza: voci maschili note per italiano
+      const maleMatch = /luca|giorgio|diego|gianluca|cosimo|male/i;
+      const voice = voices.find(v => v.lang.startsWith('it') && maleMatch.test(v.name))
+                 || voices.find(v => v.lang.startsWith('it') && !v.name.toLowerCase().includes('female'))
+                 || voices.find(v => v.lang.startsWith('it'));
+      const utt = new SpeechSynthesisUtterance(text);
+      utt.lang = 'it-IT';
+      utt.rate = 0.88;
+      utt.pitch = 0.82;   // tono più basso = voce maschile
+      utt.volume = 1.0;
+      if (voice) utt.voice = voice;
+      speechSynthesis.speak(utt);
     };
-    audio.onerror = () => {
-      // Fallback Web Speech API se Google blocca
-      if (window.speechSynthesis) {
-        const remaining = this._audioQueue.slice(this._audioIdx).join(' ');
-        const utt = new SpeechSynthesisUtterance(remaining);
-        utt.lang = 'it-IT'; utt.rate = 0.92;
-        const v = speechSynthesis.getVoices().find(x => x.lang.startsWith('it'));
-        if (v) utt.voice = v;
-        speechSynthesis.speak(utt);
-      }
-      this._audioQueue = [];
-    };
-    audio.play().catch(() => { audio.onerror(); });
-  },
-
-  _chunkText(text, maxLen) {
-    const words = text.split(' ');
-    const chunks = [];
-    let cur = '';
-    for (const w of words) {
-      const candidate = cur ? cur + ' ' + w : w;
-      if (candidate.length > maxLen) {
-        if (cur) chunks.push(cur);
-        cur = w;
-      } else { cur = candidate; }
+    if (speechSynthesis.getVoices().length > 0) {
+      doSpeak();
+    } else {
+      speechSynthesis.onvoiceschanged = () => {
+        speechSynthesis.onvoiceschanged = null;
+        doSpeak();
+      };
+      setTimeout(() => { speechSynthesis.onvoiceschanged = null; doSpeak(); }, 1500);
     }
-    if (cur) chunks.push(cur);
-    return chunks;
   },
 
   _stopSpeech() {
-    if (this._currentAudio) {
-      this._currentAudio.pause();
-      this._currentAudio.src = '';
-      this._currentAudio = null;
-    }
-    this._audioQueue = [];
     if (window.speechSynthesis) speechSynthesis.cancel();
   },
 
